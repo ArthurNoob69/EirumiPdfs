@@ -19,7 +19,14 @@ import {
 import { IPDF } from "@/models/PDF";
 import { useDebounce } from "@/lib/hooks";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const fetcher = async (url: string) => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "An error occurred while fetching the data.");
+  }
+  return res.json();
+};
 
 export default function Home() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -165,12 +172,13 @@ export default function Home() {
           <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-neutral-400" />
           </div>
-        ) : error ? (
-          <div className="flex h-64 flex-col items-center justify-center text-red-500">
-            <p>Failed to load PDFs.</p>
-            <Button variant="outline" className="mt-4" onClick={() => mutate()}>Retry</Button>
+        ) : error || !data || data.error ? (
+          <div className="flex h-64 flex-col items-center justify-center text-red-500 bg-red-50 dark:bg-red-900/10 rounded-2xl p-6">
+            <p className="font-semibold text-lg mb-2">Failed to load PDFs.</p>
+            <p className="text-sm opacity-80 mb-4">{error?.message || "Please check your database connection (MONGODB_URI)."}</p>
+            <Button variant="outline" onClick={() => mutate()}>Retry</Button>
           </div>
-        ) : data?.pdfs?.length === 0 ? (
+        ) : !data?.pdfs || data.pdfs.length === 0 ? (
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -201,7 +209,7 @@ export default function Home() {
             }}
           >
             <AnimatePresence mode="popLayout">
-              {data?.pdfs.map((pdf: IPDF) => (
+              {data.pdfs.map((pdf: IPDF) => (
                 <motion.div
                   key={pdf.publicId}
                   layout
