@@ -46,7 +46,7 @@ export default async function ViewPDFPage({ params }: { params: Promise<{ id: st
         <Link href="/" className="mt-8">
           <Button variant="outline" className="gap-2">
             <ChevronLeft className="h-4 w-4" />
-            Return to Library
+            Return to EirumiPdfs
           </Button>
         </Link>
       </div>

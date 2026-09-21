@@ -106,7 +106,7 @@ export default function Home() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-800 to-black dark:from-white dark:to-neutral-300 shadow-lg">
               <Library className="h-5 w-5 text-white dark:text-black" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground hidden sm:block">Library</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground hidden sm:block">EirumiPdfs</h1>
           </div>
           
           <div className="flex flex-1 items-center justify-end space-x-2 sm:space-x-4 ml-4">
