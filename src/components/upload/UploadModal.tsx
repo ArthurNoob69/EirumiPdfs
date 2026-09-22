@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { UploadCloud, FileText, Loader2 } from "lucide-react";
 import {
@@ -15,18 +15,36 @@ import { formatBytes } from "@/lib/utils";
 import { upload } from '@vercel/blob/client';
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/components/ui/toast";
+import { IFolderWithStats } from "@/components/folder/FolderCard";
+
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  folders?: IFolderWithStats[];
+  defaultFolderId?: string | null;
 }
 
-export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
+export function UploadModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  folders = [],
+  defaultFolderId = null,
+}: UploadModalProps) {
   const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(defaultFolderId);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync default folder when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setSelectedFolderId(defaultFolderId);
+    }
+  }, [isOpen, defaultFolderId]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const selected = acceptedFiles[0];
@@ -70,10 +88,11 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
         body: JSON.stringify({
           title: title.trim(),
           originalFileName: file.name,
-          storageKey: blob.url, // Store the blob URL as the storageKey so we can delete it later
+          storageKey: blob.url,
           storageUrl: blob.url,
           fileSize: file.size,
           mimeType: file.type,
+          folderId: selectedFolderId || null,
         }),
       });
 
@@ -185,6 +204,27 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
                   className="h-11 rounded-xl bg-background border-border/50 focus-visible:ring-primary"
                 />
               </div>
+
+              {folders.length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold tracking-tight text-foreground">
+                    Destination Folder (Optional)
+                  </label>
+                  <select
+                    value={selectedFolderId || ""}
+                    onChange={(e) => setSelectedFolderId(e.target.value ? e.target.value : null)}
+                    disabled={isUploading}
+                    className="w-full h-11 rounded-xl border border-border/60 bg-background px-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer"
+                  >
+                    <option value="">Root (No Folder)</option>
+                    {folders.map((f) => (
+                      <option key={f.publicId} value={f.publicId}>
+                        📁 {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {error && (
                 <motion.p 

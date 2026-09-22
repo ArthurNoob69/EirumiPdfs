@@ -26,19 +26,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const { id } = await params;
     await connectToDatabase();
-    const { title } = await req.json();
+    const { title, folderId } = await req.json();
 
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-      return NextResponse.json({ error: 'Valid title is required' }, { status: 400 });
+    const updateFields: any = {};
+    if (title && typeof title === 'string' && title.trim()) {
+      updateFields.title = title.trim();
+    }
+    if (folderId !== undefined) {
+      updateFields.folderId = folderId ? folderId : null;
     }
 
-    // Using _id or publicId? We should probably use publicId for consistency 
-    // or pass internal _id if this is a secure admin operation.
-    // For now, publicId is fine since anyone with the link can view it,
-    // but in a real app renaming should be protected.
+    if (Object.keys(updateFields).length === 0) {
+      return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 });
+    }
+
     const pdf = await PDF.findOneAndUpdate(
       { publicId: id, status: 'active' },
-      { $set: { title: title.trim() } },
+      { $set: updateFields },
       { new: true }
     );
 

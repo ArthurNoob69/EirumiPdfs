@@ -10,6 +10,7 @@ export interface IPDF extends Document {
   mimeType: string;
   pageCount?: number;
   views: number;
+  folderId?: string | null;
   status: 'active' | 'deleted';
   createdAt: Date;
   updatedAt: Date;
@@ -55,6 +56,11 @@ const PDFSchema = new Schema<IPDF>(
     views: {
       type: Number,
       default: 0,
+    },
+    folderId: {
+      type: String,
+      default: null,
+      index: true,
     },
     status: {
       type: String,

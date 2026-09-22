@@ -10,11 +10,18 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search') || '';
     const sort = searchParams.get('sort') || 'recent';
+    const folderId = searchParams.get('folderId');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '12', 10);
     const skip = (page - 1) * limit;
 
     const query: any = { status: 'active' };
+
+    if (folderId === 'root') {
+      query.folderId = null;
+    } else if (folderId && folderId !== 'all') {
+      query.folderId = folderId;
+    }
 
     if (search) {
       query.$or = [
@@ -67,7 +74,7 @@ export async function POST(req: Request) {
     await connectToDatabase();
     
     const body = await req.json();
-    const { title, originalFileName, storageKey, storageUrl, fileSize, mimeType, pageCount } = body;
+    const { title, originalFileName, storageKey, storageUrl, fileSize, mimeType, pageCount, folderId } = body;
 
     if (!title || !originalFileName || !storageKey || !storageUrl || !fileSize) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -85,6 +92,7 @@ export async function POST(req: Request) {
       fileSize,
       mimeType: mimeType || 'application/pdf',
       pageCount,
+      folderId: folderId || null,
     });
 
     await pdf.save();

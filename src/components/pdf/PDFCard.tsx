@@ -14,6 +14,7 @@ import {
   Star,
   Download,
   Check,
+  Folder as FolderIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -40,6 +41,7 @@ interface PDFCardProps {
   isStarred?: boolean;
   onToggleStar?: (id: string, e: React.MouseEvent) => void;
   onQuickPreview?: (pdf: IPDF) => void;
+  onMoveToFolder?: (pdf: IPDF) => void;
   onRename: (pdf: IPDF) => void;
   onDelete: (pdf: IPDF) => void;
   compact?: boolean;
@@ -50,6 +52,7 @@ export function PDFCard({
   isStarred = false,
   onToggleStar,
   onQuickPreview,
+  onMoveToFolder,
   onRename,
   onDelete,
   compact = false,
@@ -165,6 +168,12 @@ export function PDFCard({
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                {onMoveToFolder && (
+                  <DropdownMenuItem onClick={() => onMoveToFolder(pdf)}>
+                    <FolderIcon className="mr-2 h-4 w-4" />
+                    Move to Folder
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => onRename(pdf)}>
                   <Edit2 className="mr-2 h-4 w-4" />
                   Rename

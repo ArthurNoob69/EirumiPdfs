@@ -13,6 +13,7 @@ import {
   Trash2,
   Download,
   Calendar,
+  Folder as FolderIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { IPDF } from "@/models/PDF";
@@ -31,6 +32,7 @@ interface PDFListViewProps {
   starredIds: string[];
   onToggleStar: (id: string, e: React.MouseEvent) => void;
   onQuickPreview: (pdf: IPDF) => void;
+  onMoveToFolder?: (pdf: IPDF) => void;
   onRename: (pdf: IPDF) => void;
   onDelete: (pdf: IPDF) => void;
   onCopyLink: (pdf: IPDF, e: React.MouseEvent) => void;
@@ -41,6 +43,7 @@ export function PDFListView({
   starredIds,
   onToggleStar,
   onQuickPreview,
+  onMoveToFolder,
   onRename,
   onDelete,
   onCopyLink,
@@ -186,6 +189,12 @@ export function PDFListView({
                             Copy Link
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
+                          {onMoveToFolder && (
+                            <DropdownMenuItem onClick={() => onMoveToFolder(pdf)}>
+                              <FolderIcon className="mr-2 h-4 w-4" />
+                              Move to Folder
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => onRename(pdf)}>
                             <Edit2 className="mr-2 h-4 w-4" />
                             Rename

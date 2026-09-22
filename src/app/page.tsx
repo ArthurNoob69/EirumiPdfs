@@ -15,10 +15,17 @@ import {
   Eye,
   HardDrive,
   Sparkles,
+  Folder as FolderIcon,
+  FolderPlus,
+  ChevronRight,
+  Home as HomeIcon,
+  FolderTree,
 } from "lucide-react";
 import { PDFCard } from "@/components/pdf/PDFCard";
 import { PDFListView } from "@/components/pdf/PDFListView";
 import { PDFQuickPreviewModal } from "@/components/pdf/PDFQuickPreviewModal";
+import { FolderCard, IFolderWithStats } from "@/components/folder/FolderCard";
+import { MoveToFolderModal } from "@/components/folder/MoveToFolderModal";
 import { UploadModal } from "@/components/upload/UploadModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,7 +53,16 @@ const fetcher = async (url: string) => {
 };
 
 type ViewMode = "grid" | "compact" | "list";
-type FilterTab = "all" | "starred" | "recent" | "views";
+type FilterTab = "all" | "starred";
+
+const FOLDER_COLORS = [
+  { name: "blue", label: "Blue", bg: "bg-blue-500" },
+  { name: "emerald", label: "Emerald", bg: "bg-emerald-500" },
+  { name: "amber", label: "Amber", bg: "bg-amber-500" },
+  { name: "purple", label: "Purple", bg: "bg-purple-500" },
+  { name: "rose", label: "Rose", bg: "bg-rose-500" },
+  { name: "slate", label: "Slate", bg: "bg-zinc-500" },
+];
 
 export default function Home() {
   const { toast } = useToast();
@@ -57,6 +73,25 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+
+  // Active folder for filtering (null = all documents / root)
+  const [activeFolder, setActiveFolder] = useState<IFolderWithStats | null>(null);
+
+  // Folder creation & management states
+  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState("blue");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+
+  const [folderToRename, setFolderToRename] = useState<IFolderWithStats | null>(null);
+  const [renameFolderName, setRenameFolderName] = useState("");
+  const [isRenamingFolder, setIsRenamingFolder] = useState(false);
+
+  const [folderToDelete, setFolderToDelete] = useState<IFolderWithStats | null>(null);
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
+
+  // Move document state
+  const [pdfToMove, setPdfToMove] = useState<IPDF | null>(null);
 
   // Starred PDFs persistence in localStorage
   const [starredIds, setStarredIds] = useState<string[]>([]);
@@ -91,7 +126,7 @@ export default function Home() {
   // Quick Preview modal
   const [previewPdf, setPreviewPdf] = useState<IPDF | null>(null);
 
-  // Dialog states
+  // Document Rename & Delete Dialog states
   const [pdfToRename, setPdfToRename] = useState<IPDF | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
@@ -99,14 +134,20 @@ export default function Home() {
   const [pdfToDelete, setPdfToDelete] = useState<IPDF | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const query = new URLSearchParams({
+  // Fetch Folders
+  const { data: folderData, mutate: mutateFolders } = useSWR("/api/folders", fetcher);
+  const folders: IFolderWithStats[] = folderData?.folders || [];
+
+  // Fetch PDFs based on search, sort, page, and activeFolder
+  const queryParams = new URLSearchParams({
     search: debouncedSearch,
     sort,
     page: page.toString(),
     limit: "24",
-  }).toString();
+    ...(activeFolder ? { folderId: activeFolder.publicId } : {}),
+  });
 
-  const { data, error, mutate, isLoading } = useSWR(`/api/pdfs?${query}`, fetcher);
+  const { data, error, mutate, isLoading } = useSWR(`/api/pdfs?${queryParams.toString()}`, fetcher);
 
   // Calculate quick stats from loaded PDFs
   const stats = useMemo(() => {
@@ -119,7 +160,7 @@ export default function Home() {
     return { totalDocs, totalViews, totalBytes };
   }, [data]);
 
-  // Filter PDFs based on active filter tab
+  // Filter PDFs based on active filter tab (starred)
   const displayedPdfs = useMemo(() => {
     if (!data?.pdfs) return [];
     if (activeFilter === "starred") {
@@ -135,6 +176,83 @@ export default function Home() {
     toast("Public link copied to clipboard!");
   };
 
+  // Folder Actions
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    try {
+      setIsCreatingFolder(true);
+      const res = await fetch("/api/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newFolderName.trim(),
+          color: newFolderColor,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create folder");
+
+      mutateFolders();
+      setNewFolderName("");
+      setIsCreateFolderOpen(false);
+      toast("Folder created successfully!");
+    } catch (err) {
+      toast("Failed to create folder", "error");
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  };
+
+  const handleRenameFolder = async () => {
+    if (!folderToRename || !renameFolderName.trim()) return;
+    try {
+      setIsRenamingFolder(true);
+      const res = await fetch(`/api/folders/${folderToRename.publicId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: renameFolderName.trim() }),
+      });
+
+      if (!res.ok) throw new Error("Failed to rename folder");
+
+      mutateFolders();
+      if (activeFolder?.publicId === folderToRename.publicId) {
+        setActiveFolder({ ...activeFolder, name: renameFolderName.trim() });
+      }
+      setFolderToRename(null);
+      toast("Folder renamed successfully!");
+    } catch (err) {
+      toast("Failed to rename folder", "error");
+    } finally {
+      setIsRenamingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async () => {
+    if (!folderToDelete) return;
+    try {
+      setIsDeletingFolder(true);
+      const res = await fetch(`/api/folders/${folderToDelete.publicId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete folder");
+
+      mutateFolders();
+      mutate();
+      if (activeFolder?.publicId === folderToDelete.publicId) {
+        setActiveFolder(null);
+      }
+      setFolderToDelete(null);
+      toast("Folder deleted (files kept in library)");
+    } catch (err) {
+      toast("Failed to delete folder", "error");
+    } finally {
+      setIsDeletingFolder(false);
+    }
+  };
+
+  // Document Rename & Delete
   const handleRenameSubmit = async () => {
     if (!pdfToRename || !newTitle.trim()) return;
     try {
@@ -167,6 +285,7 @@ export default function Home() {
       });
       if (res.ok) {
         mutate();
+        mutateFolders();
         setPdfToDelete(null);
         toast("Document deleted successfully");
       } else {
@@ -181,7 +300,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background text-foreground bg-grid-pattern relative flex flex-col">
-      {/* Background Ambient Glows */}
+      {/* Ambient Glows */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[130px] dark:bg-blue-600/10" />
         <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-purple-500/10 blur-[130px] dark:bg-purple-600/10" />
@@ -190,7 +309,7 @@ export default function Home() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur-xl shadow-xs">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveFolder(null)}>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-900 to-black dark:from-white dark:to-neutral-300 shadow-md">
               <Library className="h-5 w-5 text-white dark:text-black" />
             </div>
@@ -283,31 +402,111 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Controls & Filter Bar */}
+        {/* Folders Section */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <FolderTree className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">Folders</h3>
+              <span className="text-xs text-muted-foreground font-semibold">({folders.length})</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCreateFolderOpen(true)}
+              className="h-8 gap-1.5 text-xs rounded-xl"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              <span>New Folder</span>
+            </Button>
+          </div>
+
+          {folders.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border bg-card/50 p-6 text-center">
+              <FolderIcon className="mx-auto h-8 w-8 text-muted-foreground/60 mb-2" />
+              <p className="text-xs font-semibold text-foreground">No folders yet</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Create folders to categorize contracts, invoices, notes, and study material.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreateFolderOpen(true)}
+                className="mt-3 text-xs h-8 gap-1.5"
+              >
+                <FolderPlus className="h-3.5 w-3.5" /> Create your first folder
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {folders.map((f) => (
+                <FolderCard
+                  key={f.publicId}
+                  folder={f}
+                  isSelected={activeFolder?.publicId === f.publicId}
+                  onSelect={(folder) => {
+                    setActiveFolder(activeFolder?.publicId === folder.publicId ? null : folder);
+                    setPage(1);
+                  }}
+                  onRename={(folder) => {
+                    setFolderToRename(folder);
+                    setRenameFolderName(folder.name);
+                  }}
+                  onDelete={(folder) => setFolderToDelete(folder)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Breadcrumb Navigation & Controls */}
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          {/* Filter Tabs */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            <button
-              onClick={() => setActiveFilter("all")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                activeFilter === "all"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              All Documents
-            </button>
-            <button
-              onClick={() => setActiveFilter("starred")}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                activeFilter === "starred"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
-              }`}
-            >
-              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
-              Starred ({starredIds.length})
-            </button>
+          {/* Breadcrumb or Filter Tabs */}
+          <div className="flex items-center space-x-2">
+            {activeFolder ? (
+              <div className="flex items-center space-x-2 bg-secondary/80 px-3.5 py-1.5 rounded-xl border border-border/60 text-xs font-medium">
+                <button
+                  onClick={() => setActiveFolder(null)}
+                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <HomeIcon className="h-3.5 w-3.5" /> All Documents
+                </button>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-semibold text-primary flex items-center gap-1.5">
+                  <FolderIcon className="h-3.5 w-3.5" /> {activeFolder.name}
+                </span>
+                <button
+                  onClick={() => setActiveFolder(null)}
+                  className="ml-2 text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+                <button
+                  onClick={() => setActiveFilter("all")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                    activeFilter === "all"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  All Documents
+                </button>
+                <button
+                  onClick={() => setActiveFilter("starred")}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                    activeFilter === "starred"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+                  Starred ({starredIds.length})
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Right: Sort & View Mode Switcher */}
@@ -385,31 +584,39 @@ export default function Home() {
             className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-6 shadow-xs text-center"
           >
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary mb-3 text-muted-foreground">
-              {activeFilter === "starred" ? (
+              {activeFolder ? (
+                <FolderIcon className="h-7 w-7 text-primary" />
+              ) : activeFilter === "starred" ? (
                 <Star className="h-7 w-7 text-amber-500" />
               ) : (
                 <Library className="h-7 w-7" />
               )}
             </div>
             <p className="text-base font-semibold text-foreground">
-              {activeFilter === "starred"
+              {activeFolder
+                ? `No documents in "${activeFolder.name}"`
+                : activeFilter === "starred"
                 ? "No starred documents yet"
                 : search
                 ? "No documents match your search"
                 : "Your PDF library is empty"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground max-w-sm">
-              {activeFilter === "starred"
-                ? "Click the star icon on any document card to pin it here for quick access."
+              {activeFolder
+                ? "Upload a PDF directly into this folder or move existing files into it."
+                : activeFilter === "starred"
+                ? "Click the star icon on any document card to pin it here."
                 : search
-                ? "Try adjusting your search keywords or clear the filter."
-                : "Upload documents to share them publicly and access them anytime."}
+                ? "Try adjusting your search terms."
+                : "Upload documents to share them publicly and organize them into folders."}
             </p>
-            {!search && activeFilter === "all" && (
-              <Button className="mt-4 gap-2 rounded-xl" onClick={() => setIsUploadOpen(true)}>
-                <Plus className="h-4 w-4" /> Upload Document
-              </Button>
-            )}
+            <Button
+              className="mt-4 gap-2 rounded-xl"
+              onClick={() => setIsUploadOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              {activeFolder ? `Upload to ${activeFolder.name}` : "Upload Document"}
+            </Button>
           </motion.div>
         ) : viewMode === "list" ? (
           /* List View */
@@ -418,6 +625,7 @@ export default function Home() {
             starredIds={starredIds}
             onToggleStar={toggleStar}
             onQuickPreview={(p) => setPreviewPdf(p)}
+            onMoveToFolder={(p) => setPdfToMove(p)}
             onRename={(p) => {
               setPdfToRename(p);
               setNewTitle(p.title);
@@ -459,6 +667,7 @@ export default function Home() {
                     isStarred={starredIds.includes(pdf.publicId)}
                     onToggleStar={toggleStar}
                     onQuickPreview={(p) => setPreviewPdf(p)}
+                    onMoveToFolder={(p) => setPdfToMove(p)}
                     onRename={(p) => {
                       setPdfToRename(p);
                       setNewTitle(p.title);
@@ -501,7 +710,25 @@ export default function Home() {
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
-        onSuccess={() => mutate()}
+        onSuccess={() => {
+          mutate();
+          mutateFolders();
+        }}
+        folders={folders}
+        defaultFolderId={activeFolder?.publicId || null}
+      />
+
+      {/* Move Document Modal */}
+      <MoveToFolderModal
+        pdf={pdfToMove}
+        folders={folders}
+        isOpen={!!pdfToMove}
+        onClose={() => setPdfToMove(null)}
+        onMoveSuccess={() => {
+          mutate();
+          mutateFolders();
+          toast("Document moved successfully!");
+        }}
       />
 
       {/* Quick Preview Modal */}
@@ -511,7 +738,110 @@ export default function Home() {
         onClose={() => setPreviewPdf(null)}
       />
 
-      {/* Rename Dialog */}
+      {/* Create Folder Dialog */}
+      <Dialog open={isCreateFolderOpen} onOpenChange={(open) => !open && setIsCreateFolderOpen(false)}>
+        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Create New Folder</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Folder Name</label>
+              <Input
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                placeholder="E.g. Invoices, Research, Contracts"
+                autoFocus
+                className="h-10 rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground">Color Theme</label>
+              <div className="flex items-center space-x-2 pt-1">
+                {FOLDER_COLORS.map((c) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => setNewFolderColor(c.name)}
+                    className={`h-7 w-7 rounded-full ${c.bg} transition-transform ${
+                      newFolderColor === c.name
+                        ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110"
+                        : "opacity-70 hover:opacity-100"
+                    }`}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateFolderOpen(false)} disabled={isCreatingFolder}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateFolder} disabled={isCreatingFolder || !newFolderName.trim()}>
+              {isCreatingFolder && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Folder Dialog */}
+      <Dialog open={!!folderToRename} onOpenChange={(open) => !open && setFolderToRename(null)}>
+        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Rename Folder</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground">Folder Name</label>
+            <Input
+              value={renameFolderName}
+              onChange={(e) => setRenameFolderName(e.target.value)}
+              placeholder="Enter folder name"
+              autoFocus
+              className="h-10 rounded-xl"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFolderToRename(null)} disabled={isRenamingFolder}>
+              Cancel
+            </Button>
+            <Button onClick={handleRenameFolder} disabled={isRenamingFolder || !renameFolderName.trim()}>
+              {isRenamingFolder && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Folder Dialog */}
+      <Dialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
+        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 dark:text-red-400">Delete Folder?</DialogTitle>
+          </DialogHeader>
+          <div className="py-3">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete <strong className="text-foreground font-semibold">{folderToDelete?.name}</strong>?
+            </p>
+            <p className="text-xs text-muted-foreground mt-2 bg-secondary/80 p-2.5 rounded-xl border border-border/50">
+              💡 <strong>Don&apos;t worry:</strong> Documents inside this folder will NOT be deleted. They will remain safely in your library at root.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFolderToDelete(null)} disabled={isDeletingFolder}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteFolder} disabled={isDeletingFolder}>
+              {isDeletingFolder && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete Folder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Document Dialog */}
       <Dialog open={!!pdfToRename} onOpenChange={(open) => !open && setPdfToRename(null)}>
         <DialogContent className="bg-card text-card-foreground border-border shadow-2xl">
           <DialogHeader>
@@ -539,7 +869,7 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Dialog */}
+      {/* Delete Document Dialog */}
       <Dialog open={!!pdfToDelete} onOpenChange={(open) => !open && setPdfToDelete(null)}>
         <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
           <DialogHeader>
