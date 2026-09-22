@@ -3,6 +3,8 @@ import connectToDatabase from '@/lib/mongodb';
 import PDF from '@/models/PDF';
 import { nanoid } from 'nanoid';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   try {
     await connectToDatabase();
@@ -15,20 +17,26 @@ export async function GET(req: Request) {
     const limit = parseInt(searchParams.get('limit') || '12', 10);
     const skip = (page - 1) * limit;
 
-    const query: any = { status: 'active' };
+    const conditions: any[] = [{ status: 'active' }];
 
     if (folderId === 'root') {
-      query.folderId = null;
+      conditions.push({
+        $or: [{ folderId: null }, { folderId: { $exists: false } }, { folderId: '' }],
+      });
     } else if (folderId && folderId !== 'all') {
-      query.folderId = folderId;
+      conditions.push({ folderId });
     }
 
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { originalFileName: { $regex: search, $options: 'i' } },
-      ];
+      conditions.push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { originalFileName: { $regex: search, $options: 'i' } },
+        ],
+      });
     }
+
+    const query = conditions.length > 1 ? { $and: conditions } : conditions[0];
 
     let sortOptions: any = { createdAt: -1 };
     switch (sort) {

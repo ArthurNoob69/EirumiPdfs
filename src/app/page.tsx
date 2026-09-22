@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import useSWR from "swr";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import {
   Library,
   Search,
@@ -44,7 +44,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatBytes } from "@/lib/utils";
 
 const fetcher = async (url: string) => {
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || "An error occurred while fetching the data.");
@@ -53,7 +53,7 @@ const fetcher = async (url: string) => {
 };
 
 type ViewMode = "grid" | "compact" | "list";
-type FilterTab = "all" | "starred";
+type FilterTab = "all" | "unorganized" | "starred";
 
 const FOLDER_COLORS = [
   { name: "blue", label: "Blue", bg: "bg-blue-500" },
@@ -66,6 +66,8 @@ const FOLDER_COLORS = [
 
 export default function Home() {
   const { toast } = useToast();
+  const { mutate: globalMutate } = useSWRConfig();
+
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 400);
@@ -74,8 +76,8 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
 
-  // Active folder for filtering (null = all documents / root)
-  const [activeFolder, setActiveFolder] = useState<IFolderWithStats | null>(null);
+  // Active folder public ID for filtering (null = all documents / root)
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
 
   // Folder creation & management states
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
@@ -138,27 +140,49 @@ export default function Home() {
   const { data: folderData, mutate: mutateFolders } = useSWR("/api/folders", fetcher);
   const folders: IFolderWithStats[] = folderData?.folders || [];
 
-  // Fetch PDFs based on search, sort, page, and activeFolder
+  // Active folder derived dynamically from fresh folders data
+  const activeFolder = useMemo(() => {
+    if (!activeFolderId) return null;
+    return folders.find((f) => f.publicId === activeFolderId) || null;
+  }, [activeFolderId, folders]);
+
+  // Global cache purger to keep all views completely in sync
+  const refreshAll = useCallback(() => {
+    globalMutate(
+      (key) =>
+        typeof key === "string" &&
+        (key.startsWith("/api/pdfs") || key.startsWith("/api/folders"))
+    );
+  }, [globalMutate]);
+
+  // Fetch PDFs based on search, sort, page, activeFolderId, and activeFilter
   const queryParams = new URLSearchParams({
     search: debouncedSearch,
     sort,
     page: page.toString(),
     limit: "24",
-    ...(activeFolder ? { folderId: activeFolder.publicId } : {}),
+    ...(activeFolderId
+      ? { folderId: activeFolderId }
+      : activeFilter === "unorganized"
+      ? { folderId: "root" }
+      : {}),
   });
 
   const { data, error, mutate, isLoading } = useSWR(`/api/pdfs?${queryParams.toString()}`, fetcher);
 
-  // Calculate quick stats from loaded PDFs
+  // Calculate quick stats across entire library
   const stats = useMemo(() => {
-    if (!data?.pdfs || !Array.isArray(data.pdfs)) {
-      return { totalDocs: 0, totalViews: 0, totalBytes: 0 };
-    }
-    const totalDocs = data.pagination?.totalItems || data.pdfs.length;
-    const totalViews = data.pdfs.reduce((acc: number, p: IPDF) => acc + (p.views || 0), 0);
-    const totalBytes = data.pdfs.reduce((acc: number, p: IPDF) => acc + (p.fileSize || 0), 0);
+    const totalDocs =
+      folderData?.rootStats?.count !== undefined && folders.length > 0
+        ? folderData.rootStats.count + folders.reduce((acc: number, f: IFolderWithStats) => acc + (f.count || 0), 0)
+        : data?.pagination?.total || data?.pdfs?.length || 0;
+    const totalViews = data?.pdfs?.reduce((acc: number, p: IPDF) => acc + (p.views || 0), 0) || 0;
+    const totalBytes =
+      folderData?.rootStats?.totalSize !== undefined && folders.length > 0
+        ? folderData.rootStats.totalSize + folders.reduce((acc: number, f: IFolderWithStats) => acc + (f.totalSize || 0), 0)
+        : data?.pdfs?.reduce((acc: number, p: IPDF) => acc + (p.fileSize || 0), 0) || 0;
     return { totalDocs, totalViews, totalBytes };
-  }, [data]);
+  }, [data, folderData, folders]);
 
   // Filter PDFs based on active filter tab (starred)
   const displayedPdfs = useMemo(() => {
@@ -192,7 +216,7 @@ export default function Home() {
 
       if (!res.ok) throw new Error("Failed to create folder");
 
-      mutateFolders();
+      refreshAll();
       setNewFolderName("");
       setIsCreateFolderOpen(false);
       toast("Folder created successfully!");
@@ -215,10 +239,7 @@ export default function Home() {
 
       if (!res.ok) throw new Error("Failed to rename folder");
 
-      mutateFolders();
-      if (activeFolder?.publicId === folderToRename.publicId) {
-        setActiveFolder({ ...activeFolder, name: renameFolderName.trim() });
-      }
+      refreshAll();
       setFolderToRename(null);
       toast("Folder renamed successfully!");
     } catch (err) {
@@ -238,10 +259,9 @@ export default function Home() {
 
       if (!res.ok) throw new Error("Failed to delete folder");
 
-      mutateFolders();
-      mutate();
-      if (activeFolder?.publicId === folderToDelete.publicId) {
-        setActiveFolder(null);
+      refreshAll();
+      if (activeFolderId === folderToDelete.publicId) {
+        setActiveFolderId(null);
       }
       setFolderToDelete(null);
       toast("Folder deleted (files kept in library)");
@@ -263,7 +283,7 @@ export default function Home() {
         body: JSON.stringify({ title: newTitle }),
       });
       if (res.ok) {
-        mutate();
+        refreshAll();
         setPdfToRename(null);
         toast("Document renamed successfully!");
       } else {
@@ -284,8 +304,7 @@ export default function Home() {
         method: "DELETE",
       });
       if (res.ok) {
-        mutate();
-        mutateFolders();
+        refreshAll();
         setPdfToDelete(null);
         toast("Document deleted successfully");
       } else {
@@ -309,7 +328,7 @@ export default function Home() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur-xl shadow-xs">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveFolder(null)}>
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setActiveFolderId(null); setActiveFilter("all"); }}>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-900 to-black dark:from-white dark:to-neutral-300 shadow-md">
               <Library className="h-5 w-5 text-white dark:text-black" />
             </div>
@@ -443,9 +462,9 @@ export default function Home() {
                 <FolderCard
                   key={f.publicId}
                   folder={f}
-                  isSelected={activeFolder?.publicId === f.publicId}
+                  isSelected={activeFolderId === f.publicId}
                   onSelect={(folder) => {
-                    setActiveFolder(activeFolder?.publicId === folder.publicId ? null : folder);
+                    setActiveFolderId(activeFolderId === folder.publicId ? null : folder.publicId);
                     setPage(1);
                   }}
                   onRename={(folder) => {
@@ -466,7 +485,7 @@ export default function Home() {
             {activeFolder ? (
               <div className="flex items-center space-x-2 bg-secondary/80 px-3.5 py-1.5 rounded-xl border border-border/60 text-xs font-medium">
                 <button
-                  onClick={() => setActiveFolder(null)}
+                  onClick={() => setActiveFolderId(null)}
                   className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <HomeIcon className="h-3.5 w-3.5" /> All Documents
@@ -476,7 +495,7 @@ export default function Home() {
                   <FolderIcon className="h-3.5 w-3.5" /> {activeFolder.name}
                 </span>
                 <button
-                  onClick={() => setActiveFolder(null)}
+                  onClick={() => setActiveFolderId(null)}
                   className="ml-2 text-xs text-muted-foreground hover:text-foreground underline"
                 >
                   Clear
@@ -485,7 +504,10 @@ export default function Home() {
             ) : (
               <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
                 <button
-                  onClick={() => setActiveFilter("all")}
+                  onClick={() => {
+                    setActiveFilter("all");
+                    setPage(1);
+                  }}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                     activeFilter === "all"
                       ? "bg-primary text-primary-foreground shadow-xs"
@@ -495,7 +517,23 @@ export default function Home() {
                   All Documents
                 </button>
                 <button
-                  onClick={() => setActiveFilter("starred")}
+                  onClick={() => {
+                    setActiveFilter("unorganized");
+                    setPage(1);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                    activeFilter === "unorganized"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  Unorganized {folderData?.rootStats?.count !== undefined ? `(${folderData.rootStats.count})` : ""}
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveFilter("starred");
+                    setPage(1);
+                  }}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
                     activeFilter === "starred"
                       ? "bg-primary text-primary-foreground shadow-xs"
@@ -597,15 +635,19 @@ export default function Home() {
                 ? `No documents in "${activeFolder.name}"`
                 : activeFilter === "starred"
                 ? "No starred documents yet"
+                : activeFilter === "unorganized"
+                ? "All documents are organized into folders!"
                 : search
                 ? "No documents match your search"
                 : "Your PDF library is empty"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground max-w-sm">
               {activeFolder
-                ? "Upload a PDF directly into this folder or move existing files into it."
+                ? `Upload a PDF directly into "${activeFolder.name}" or move existing files into it.`
                 : activeFilter === "starred"
                 ? "Click the star icon on any document card to pin it here."
+                : activeFilter === "unorganized"
+                ? "Files that have not been assigned to a folder appear here."
                 : search
                 ? "Try adjusting your search terms."
                 : "Upload documents to share them publicly and organize them into folders."}
@@ -622,10 +664,15 @@ export default function Home() {
           /* List View */
           <PDFListView
             pdfs={displayedPdfs}
+            folders={folders}
             starredIds={starredIds}
             onToggleStar={toggleStar}
             onQuickPreview={(p) => setPreviewPdf(p)}
             onMoveToFolder={(p) => setPdfToMove(p)}
+            onFolderClick={(folderId) => {
+              setActiveFolderId(folderId);
+              setPage(1);
+            }}
             onRename={(p) => {
               setPdfToRename(p);
               setNewTitle(p.title);
@@ -669,6 +716,10 @@ export default function Home() {
                     onToggleStar={toggleStar}
                     onQuickPreview={(p) => setPreviewPdf(p)}
                     onMoveToFolder={(p) => setPdfToMove(p)}
+                    onFolderClick={(folderId) => {
+                      setActiveFolderId(folderId);
+                      setPage(1);
+                    }}
                     onRename={(p) => {
                       setPdfToRename(p);
                       setNewTitle(p.title);
@@ -712,11 +763,10 @@ export default function Home() {
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onSuccess={() => {
-          mutate();
-          mutateFolders();
+          refreshAll();
         }}
         folders={folders}
-        defaultFolderId={activeFolder?.publicId || null}
+        defaultFolderId={activeFolderId}
       />
 
       {/* Move Document Modal */}
@@ -725,10 +775,14 @@ export default function Home() {
         folders={folders}
         isOpen={!!pdfToMove}
         onClose={() => setPdfToMove(null)}
-        onMoveSuccess={() => {
-          mutate();
-          mutateFolders();
-          toast("Document moved successfully!");
+        onMoveSuccess={(targetFolderId) => {
+          refreshAll();
+          const folderObj = folders.find((f) => f.publicId === targetFolderId);
+          toast(
+            folderObj
+              ? `Document moved to "${folderObj.name}"!`
+              : "Document moved to root!"
+          );
         }}
       />
 

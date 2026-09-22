@@ -4,6 +4,8 @@ import Folder from '@/models/Folder';
 import PDF from '@/models/PDF';
 import { nanoid } from 'nanoid';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     await connectToDatabase();
@@ -16,7 +18,7 @@ export async function GET() {
       { $match: { status: 'active' } },
       {
         $group: {
-          _id: '$folderId',
+          _id: { $ifNull: ['$folderId', null] },
           count: { $sum: 1 },
           totalSize: { $sum: '$fileSize' },
         },

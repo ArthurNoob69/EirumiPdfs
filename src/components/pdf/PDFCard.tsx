@@ -43,6 +43,7 @@ interface PDFCardProps {
   onToggleStar?: (id: string, e: React.MouseEvent) => void;
   onQuickPreview?: (pdf: IPDF) => void;
   onMoveToFolder?: (pdf: IPDF) => void;
+  onFolderClick?: (folderId: string) => void;
   onRename: (pdf: IPDF) => void;
   onDelete: (pdf: IPDF) => void;
   compact?: boolean;
@@ -55,6 +56,7 @@ export function PDFCard({
   onToggleStar,
   onQuickPreview,
   onMoveToFolder,
+  onFolderClick,
   onRename,
   onDelete,
   compact = false,
@@ -92,24 +94,44 @@ export function PDFCard({
             <PDFThumbnail url={pdf.storageUrl} compact={true} />
           </div>
 
-          {/* Star Button Top-Left */}
-          {onToggleStar && (
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onToggleStar(pdf.publicId, e);
-              }}
-              className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-background/90 backdrop-blur-md border border-border/60 shadow-xs transition-all active:scale-95 ${
-                isStarred
-                  ? "text-amber-500 opacity-100"
-                  : "text-muted-foreground hover:text-amber-500 opacity-0 group-hover:opacity-100"
-              }`}
-              title={isStarred ? "Unstar" : "Star"}
-            >
-              <Star className={`h-3.5 w-3.5 ${isStarred ? "fill-amber-400" : ""}`} />
-            </button>
-          )}
+          {/* Star Button & Folder Badge Top-Left */}
+          <div className="absolute left-2 top-2 z-10 flex items-center gap-1">
+            {onToggleStar && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleStar(pdf.publicId, e);
+                }}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg bg-background/90 backdrop-blur-md border border-border/60 shadow-xs transition-all active:scale-95 ${
+                  isStarred
+                    ? "text-amber-500 opacity-100"
+                    : "text-muted-foreground hover:text-amber-500 opacity-0 group-hover:opacity-100"
+                }`}
+                title={isStarred ? "Unstar" : "Star"}
+              >
+                <Star className={`h-3.5 w-3.5 ${isStarred ? "fill-amber-400" : ""}`} />
+              </button>
+            )}
+
+            {folderName && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (pdf.folderId && onFolderClick) {
+                    onFolderClick(pdf.folderId);
+                  }
+                }}
+                className="inline-flex items-center gap-1 rounded-lg bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-background shadow-xs backdrop-blur-md border border-border/60 truncate max-w-[85px] cursor-pointer transition-colors"
+                title={`Folder: ${folderName}`}
+              >
+                <FolderIcon className="h-3 w-3 text-primary shrink-0" />
+                <span className="truncate">{folderName}</span>
+              </button>
+            )}
+          </div>
 
           {/* Quick Preview & Menu Buttons Top-Right */}
           <div className="absolute right-2 top-2 z-10 flex items-center space-x-1">
@@ -246,10 +268,21 @@ export function PDFCard({
           </span>
 
           {folderName && (
-            <span className="inline-flex items-center gap-1 rounded-md bg-background/90 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-xs backdrop-blur-md border border-border/60 truncate max-w-[100px]">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (pdf.folderId && onFolderClick) {
+                  onFolderClick(pdf.folderId);
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded-md bg-background/90 px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-background shadow-xs backdrop-blur-md border border-border/60 truncate max-w-[110px] transition-colors cursor-pointer"
+              title={`Folder: ${folderName}`}
+            >
               <FolderIcon className="h-3 w-3 text-primary shrink-0" />
               <span className="truncate">{folderName}</span>
-            </span>
+            </button>
           )}
         </div>
 

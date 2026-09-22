@@ -29,10 +29,12 @@ import {
 
 interface PDFListViewProps {
   pdfs: IPDF[];
+  folders?: { publicId: string; name: string }[];
   starredIds: string[];
   onToggleStar: (id: string, e: React.MouseEvent) => void;
   onQuickPreview: (pdf: IPDF) => void;
   onMoveToFolder?: (pdf: IPDF) => void;
+  onFolderClick?: (folderId: string) => void;
   onRename: (pdf: IPDF) => void;
   onDelete: (pdf: IPDF) => void;
   onCopyLink: (pdf: IPDF, e: React.MouseEvent) => void;
@@ -40,10 +42,12 @@ interface PDFListViewProps {
 
 export function PDFListView({
   pdfs,
+  folders = [],
   starredIds,
   onToggleStar,
   onQuickPreview,
   onMoveToFolder,
+  onFolderClick,
   onRename,
   onDelete,
   onCopyLink,
@@ -94,14 +98,37 @@ export function PDFListView({
                         <FileText className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/view/${pdf.publicId}`}
-                          prefetch={true}
-                          className="font-medium text-foreground hover:text-primary hover:underline line-clamp-1 block"
-                        >
-                          {pdf.title}
-                        </Link>
-                        <span className="text-xs text-muted-foreground line-clamp-1 block md:hidden">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link
+                            href={`/view/${pdf.publicId}`}
+                            prefetch={true}
+                            className="font-medium text-foreground hover:text-primary hover:underline line-clamp-1"
+                          >
+                            {pdf.title}
+                          </Link>
+                          {(() => {
+                            const folder = folders.find((f) => f.publicId === pdf.folderId);
+                            if (!folder) return null;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (pdf.folderId && onFolderClick) {
+                                    onFolderClick(pdf.folderId);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground border border-border/50 transition-colors shrink-0 cursor-pointer"
+                                title={`Folder: ${folder.name}`}
+                              >
+                                <FolderIcon className="h-2.5 w-2.5 text-primary shrink-0" />
+                                <span className="truncate max-w-[80px]">{folder.name}</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
+                        <span className="text-xs text-muted-foreground line-clamp-1 block md:hidden mt-0.5">
                           {formatBytes(pdf.fileSize)} • {pdf.views} views
                         </span>
                       </div>
