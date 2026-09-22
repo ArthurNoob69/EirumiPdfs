@@ -636,10 +636,10 @@ export default function Home() {
         ) : (
           /* Grid & Compact Grid Views */
           <motion.div
-            className={`grid gap-4 sm:gap-6 ${
+            className={`grid ${
               viewMode === "compact"
-                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-                : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4"
+                : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
             }`}
             initial="hidden"
             animate="show"
@@ -665,6 +665,7 @@ export default function Home() {
                     pdf={pdf}
                     compact={viewMode === "compact"}
                     isStarred={starredIds.includes(pdf.publicId)}
+                    folderName={folders.find((f) => f.publicId === pdf.folderId)?.name}
                     onToggleStar={toggleStar}
                     onQuickPreview={(p) => setPreviewPdf(p)}
                     onMoveToFolder={(p) => setPdfToMove(p)}
