@@ -13,6 +13,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import { ToastProvider } from "@/components/ui/toast";
+
 export const metadata: Metadata = {
   title: "EirumiPdfs",
   description: "A premium PDF library and sharing platform",
@@ -32,7 +34,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

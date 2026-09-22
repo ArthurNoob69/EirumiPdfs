@@ -33,14 +33,14 @@ export default async function ViewPDFPage({ params }: { params: Promise<{ id: st
 
   if (!pdf) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-neutral-50 px-4 text-center">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm mb-6">
-          <FileQuestion className="h-10 w-10 text-neutral-400" />
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground px-4 text-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-card border border-border shadow-md mb-6">
+          <FileQuestion className="h-10 w-10 text-muted-foreground" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-900">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           PDF Not Found
         </h1>
-        <p className="mt-2 max-w-md text-neutral-500">
+        <p className="mt-2 max-w-md text-sm text-muted-foreground">
           This document may have been deleted, or the link is incorrect. Please verify the URL.
         </p>
         <Link href="/" className="mt-8">

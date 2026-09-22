@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { formatBytes } from "@/lib/utils";
 import { upload } from '@vercel/blob/client';
 import { motion, AnimatePresence } from "framer-motion";
-
+import { useToast } from "@/components/ui/toast";
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -22,6 +22,7 @@ interface UploadModalProps {
 }
 
 export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
+  const { toast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -78,6 +79,7 @@ export function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
 
       if (!dbRes.ok) throw new Error("Failed to save PDF details");
 
+      toast("Document uploaded successfully!");
       onSuccess();
       handleClose();
     } catch (err: any) {
