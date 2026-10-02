@@ -142,3 +142,22 @@ body {
 html {
   transition: color-scheme 0.2s;
 }
+
+/* React-PDF Canvas & Page Rendering Fixes (prevents collapse, cutoffs & clipping) */
+.react-pdf__Page {
+  position: relative !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+.react-pdf__Page__canvas {
+  margin: 0 auto !important;
+  display: block !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.react-pdf__Page__textContent {
+  user-select: text;
+}
