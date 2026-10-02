@@ -30,13 +30,13 @@ interface FolderCardProps {
   onDelete: (folder: IFolderWithStats) => void;
 }
 
-const COLOR_MAP: Record<string, { bg: string; icon: string; border: string; activeBg: string }> = {
-  blue: { bg: "bg-blue-500/8 dark:bg-blue-500/15", icon: "text-blue-600 dark:text-blue-400", border: "hover:border-blue-400/40", activeBg: "bg-blue-500/10" },
-  emerald: { bg: "bg-emerald-500/8 dark:bg-emerald-500/15", icon: "text-emerald-600 dark:text-emerald-400", border: "hover:border-emerald-400/40", activeBg: "bg-emerald-500/10" },
-  amber: { bg: "bg-amber-500/8 dark:bg-amber-500/15", icon: "text-amber-600 dark:text-amber-400", border: "hover:border-amber-400/40", activeBg: "bg-amber-500/10" },
-  purple: { bg: "bg-purple-500/8 dark:bg-purple-500/15", icon: "text-purple-600 dark:text-purple-400", border: "hover:border-purple-400/40", activeBg: "bg-purple-500/10" },
-  rose: { bg: "bg-rose-500/8 dark:bg-rose-500/15", icon: "text-rose-600 dark:text-rose-400", border: "hover:border-rose-400/40", activeBg: "bg-rose-500/10" },
-  slate: { bg: "bg-zinc-500/8 dark:bg-zinc-500/15", icon: "text-zinc-600 dark:text-zinc-400", border: "hover:border-zinc-400/40", activeBg: "bg-zinc-500/10" },
+const DRIVE_FOLDER_COLORS: Record<string, { iconColor: string; bgTint: string }> = {
+  blue: { iconColor: "text-blue-500 fill-blue-500/20", bgTint: "hover:bg-blue-500/5" },
+  emerald: { iconColor: "text-emerald-500 fill-emerald-500/20", bgTint: "hover:bg-emerald-500/5" },
+  amber: { iconColor: "text-amber-500 fill-amber-500/20", bgTint: "hover:bg-amber-500/5" },
+  purple: { iconColor: "text-purple-500 fill-purple-500/20", bgTint: "hover:bg-purple-500/5" },
+  rose: { iconColor: "text-rose-500 fill-rose-500/20", bgTint: "hover:bg-rose-500/5" },
+  slate: { iconColor: "text-zinc-500 fill-zinc-500/20", bgTint: "hover:bg-zinc-500/5" },
 };
 
 export function FolderCard({
@@ -46,77 +46,69 @@ export function FolderCard({
   onRename,
   onDelete,
 }: FolderCardProps) {
-  const colorStyle = COLOR_MAP[folder.color || "blue"] || COLOR_MAP.blue;
+  const colorConf = DRIVE_FOLDER_COLORS[folder.color || "blue"] || DRIVE_FOLDER_COLORS.blue;
 
   return (
-    <motion.div
-      whileHover={{ y: -2 }}
-      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+    <div
       onClick={() => onSelect(folder)}
-      className={`group relative flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-all ${
+      className={`group relative flex items-center justify-between rounded-xl px-3.5 py-3 cursor-pointer select-none transition-all border ${
         isSelected
-          ? `border-primary/50 ${colorStyle.activeBg} ring-1 ring-primary/20 shadow-md shadow-primary/5`
-          : `border-border/50 bg-card/80 backdrop-blur-sm hover:bg-accent/30 ${colorStyle.border} hover:shadow-md`
+          ? "bg-[#c2e7ff] text-[#001d35] border-transparent font-medium shadow-sm dark:bg-[#004a77] dark:text-[#c2e7ff]"
+          : "bg-secondary/40 hover:bg-secondary/80 border-border/40 text-foreground"
       }`}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${colorStyle.bg} ${colorStyle.icon} shrink-0 transition-transform duration-300 group-hover:scale-105`}>
-          <FolderIcon className="h-5 w-5 fill-current/20" />
-        </div>
-
+        <FolderIcon
+          className={`h-5 w-5 shrink-0 transition-transform group-hover:scale-105 ${
+            isSelected ? "text-current fill-current/30" : colorConf.iconColor
+          }`}
+        />
         <div className="min-w-0 flex-1">
-          <h4 className="truncate text-sm font-semibold text-foreground leading-tight" title={folder.name}>
+          <p className="truncate text-[13px] font-medium leading-none" title={folder.name}>
             {folder.name}
-          </h4>
-          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
-            <span>{folder.count} {folder.count === 1 ? "file" : "files"}</span>
-            {folder.totalSize > 0 && (
-              <>
-                <span className="opacity-40">•</span>
-                <span>{formatBytes(folder.totalSize)}</span>
-              </>
-            )}
+          </p>
+          <p className={`text-[11px] mt-1 ${isSelected ? "opacity-80" : "text-muted-foreground"}`}>
+            {folder.count} {folder.count === 1 ? "file" : "files"}
+            {folder.totalSize > 0 && ` • ${formatBytes(folder.totalSize)}`}
           </p>
         </div>
       </div>
 
-      {/* Actions & Chevron */}
-      <div className="flex items-center gap-1 shrink-0">
-        <div onClick={(e) => e.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-all"
-              >
-                <MoreVertical className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44 rounded-xl border-border/60 bg-card/95 backdrop-blur-xl shadow-xl">
-              <DropdownMenuItem onClick={() => onSelect(folder)} className="rounded-lg">
-                <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                Open Folder
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onRename(folder)} className="rounded-lg">
-                <Edit2 className="mr-2 h-4 w-4 text-muted-foreground" />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-border/50" />
-              <DropdownMenuItem
-                onClick={() => onDelete(folder)}
-                className="text-red-600 focus:bg-red-500/10 focus:text-red-600 rounded-lg"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <ChevronRight className={`h-4 w-4 transition-all ${
-          isSelected ? "text-primary" : "text-muted-foreground/40 group-hover:text-muted-foreground"
-        }`} />
+      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 rounded-full transition-opacity ${
+                isSelected
+                  ? "hover:bg-black/10 dark:hover:bg-white/10 opacity-80"
+                  : "text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 hover:bg-secondary"
+              }`}
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44 rounded-2xl border-border bg-card shadow-xl p-1.5">
+            <DropdownMenuItem onClick={() => onSelect(folder)} className="rounded-xl cursor-pointer">
+              <FileText className="mr-2.5 h-4 w-4 text-muted-foreground" />
+              Open Folder
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onRename(folder)} className="rounded-xl cursor-pointer">
+              <Edit2 className="mr-2.5 h-4 w-4 text-muted-foreground" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="my-1 bg-border/60" />
+            <DropdownMenuItem
+              onClick={() => onDelete(folder)}
+              className="text-red-600 focus:bg-red-500/10 focus:text-red-600 rounded-xl cursor-pointer"
+            >
+              <Trash2 className="mr-2.5 h-4 w-4" />
+              Delete Folder
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-    </motion.div>
+    </div>
   );
 }
