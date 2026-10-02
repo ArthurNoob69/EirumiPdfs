@@ -685,93 +685,93 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
         )}
       </AnimatePresence>
 
-      {/* ═══════════════ MAIN VIEWPORT (Thumbnails Drawer + Reading Canvas) ═══════════════ */}
+      {/* ═══════════════ MAIN VIEWPORT (Document Context wraps Thumbnails & Canvas) ═══════════════ */}
       <div className="flex flex-1 min-h-0 relative overflow-hidden">
-        {/* Left Thumbnails Drawer */}
-        <AnimatePresence>
-          {showThumbnails && (
-            <motion.aside
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 170, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="border-r border-border/50 bg-card/90 backdrop-blur-md flex flex-col shrink-0 overflow-hidden z-20"
-            >
-              <div className="p-3 border-b border-border/40 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <span>Pages ({numPages || 0})</span>
-                <button
-                  onClick={() => setShowThumbnails(false)}
-                  className="p-1 rounded-full hover:bg-secondary text-muted-foreground"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                {Array.from(new Array(numPages || 0), (_, index) => {
-                  const pNum = index + 1;
-                  const isActive =
-                    viewMode === "book"
-                      ? pNum === leftBookPage || pNum === rightBookPage
-                      : pageNumber === pNum;
-
-                  return (
-                    <div
-                      key={`thumb_${pNum}`}
-                      onClick={() => jumpToPage(pNum)}
-                      className={`flex flex-col items-center p-1.5 rounded-xl cursor-pointer transition-all ${
-                        isActive
-                          ? "bg-[#c2e7ff] text-[#001d35] ring-2 ring-primary dark:bg-[#004a77] dark:text-[#c2e7ff]"
-                          : "hover:bg-secondary/60 text-muted-foreground"
-                      }`}
-                    >
-                      <div className="w-24 aspect-[3/4] bg-white text-black shadow-xs rounded border border-border/40 overflow-hidden flex items-center justify-center pointer-events-none">
-                        <Page
-                          pageNumber={pNum}
-                          width={96}
-                          renderTextLayer={false}
-                          renderAnnotationLayer={false}
-                        />
-                      </div>
-                      <span className="text-[11px] font-semibold mt-1">Page {pNum}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.aside>
-          )}
-        </AnimatePresence>
-
-        {/* ═══════════════ MAIN READING CANVAS ═══════════════ */}
-        <main
-          ref={scrollContainerRef}
-          className={`flex-1 overflow-auto flex justify-center p-4 sm:p-8 relative ${
-            viewMode === "book"
-              ? "bg-[#18181b] dark:bg-[#09090b] text-foreground"
-              : "bg-[#e9eef6]/60 dark:bg-[#0e0e0e]"
-          }`}
+        <Document
+          file={pdf.storageUrl}
+          onLoadSuccess={onDocumentLoadSuccess}
+          className="flex flex-1 min-h-0 w-full h-full relative overflow-hidden"
+          loading={
+            <div className="flex flex-1 min-h-0 w-full flex-col items-center justify-center min-h-[50vh] text-muted-foreground gap-3">
+              <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+              <p className="text-xs font-semibold text-muted-foreground animate-pulse">
+                Opening in EirumiView...
+              </p>
+            </div>
+          }
+          error={
+            <div className="flex flex-1 min-h-0 w-full flex-col items-center justify-center min-h-[40vh] text-red-500 text-center bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-6 rounded-2xl max-w-md mx-auto my-auto">
+              <p className="font-semibold text-sm mb-1">Failed to display PDF</p>
+              <p className="text-xs opacity-80 mb-4">Please check file permissions or network access.</p>
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="rounded-xl">
+                Reload
+              </Button>
+            </div>
+          }
         >
-          <Document
-            file={pdf.storageUrl}
-            onLoadSuccess={onDocumentLoadSuccess}
-            className="flex flex-col items-center w-full"
-            loading={
-              <div className="flex flex-col items-center justify-center min-h-[50vh] text-muted-foreground gap-3">
-                <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
-                <p className="text-xs font-semibold text-muted-foreground animate-pulse">
-                  Opening in EirumiView...
-                </p>
-              </div>
-            }
-            error={
-              <div className="flex flex-col items-center justify-center min-h-[40vh] text-red-500 text-center bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-6 rounded-2xl max-w-md">
-                <p className="font-semibold text-sm mb-1">Failed to display PDF</p>
-                <p className="text-xs opacity-80 mb-4">Please check file permissions or network access.</p>
-                <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="rounded-xl">
-                  Reload
-                </Button>
-              </div>
-            }
+          {/* Left Thumbnails Drawer */}
+          <AnimatePresence>
+            {showThumbnails && (
+              <motion.aside
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 170, opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="border-r border-border/50 bg-card/90 backdrop-blur-md flex flex-col shrink-0 overflow-hidden z-20"
+              >
+                <div className="p-3 border-b border-border/40 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <span>Pages ({numPages || 0})</span>
+                  <button
+                    onClick={() => setShowThumbnails(false)}
+                    className="p-1 rounded-full hover:bg-secondary text-muted-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  {Array.from(new Array(numPages || 0), (_, index) => {
+                    const pNum = index + 1;
+                    const isActive =
+                      viewMode === "book"
+                        ? pNum === leftBookPage || pNum === rightBookPage
+                        : pageNumber === pNum;
+
+                    return (
+                      <div
+                        key={`thumb_${pNum}`}
+                        onClick={() => jumpToPage(pNum)}
+                        className={`flex flex-col items-center p-1.5 rounded-xl cursor-pointer transition-all ${
+                          isActive
+                            ? "bg-[#c2e7ff] text-[#001d35] ring-2 ring-primary dark:bg-[#004a77] dark:text-[#c2e7ff]"
+                            : "hover:bg-secondary/60 text-muted-foreground"
+                        }`}
+                      >
+                        <div className="w-24 aspect-[3/4] bg-white text-black shadow-xs rounded border border-border/40 overflow-hidden flex items-center justify-center pointer-events-none">
+                          <Page
+                            pageNumber={pNum}
+                            width={96}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={false}
+                          />
+                        </div>
+                        <span className="text-[11px] font-semibold mt-1">Page {pNum}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.aside>
+            )}
+          </AnimatePresence>
+
+          {/* ═══════════════ MAIN READING CANVAS ═══════════════ */}
+          <main
+            ref={scrollContainerRef}
+            className={`flex-1 overflow-auto flex justify-center p-4 sm:p-8 relative ${
+              viewMode === "book"
+                ? "bg-[#18181b] dark:bg-[#09090b] text-foreground"
+                : "bg-[#e9eef6]/60 dark:bg-[#0e0e0e]"
+            }`}
           >
             {/* ═══════════════════════════════════════════════════════
                 1. CONTINUOUS SCROLL MODE (Default, Seamless Flow)
@@ -975,8 +975,8 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                 )}
               </div>
             )}
-          </Document>
-        </main>
+          </main>
+        </Document>
       </div>
 
       {/* ═══════════════ FLOATING BOTTOM TOOLBAR (Drive Signature) ═══════════════ */}
