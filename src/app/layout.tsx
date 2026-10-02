@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
-  title: "EirumiPdfs",
-  description: "A premium PDF library and sharing platform",
+  title: "EirumiView - Document Library & Viewer",
+  description: "A professional PDF library, document manager, and viewer",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

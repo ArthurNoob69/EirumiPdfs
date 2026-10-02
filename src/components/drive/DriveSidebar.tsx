@@ -86,14 +86,9 @@ export function DriveSidebar({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3.5 px-5 py-3.5 rounded-2xl bg-card border border-border/80 shadow-md hover:shadow-lg transition-all active:scale-[0.98] group text-foreground font-medium text-sm">
-                {/* Google-colored Plus Icon */}
-                <div className="relative h-6 w-6 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="h-6 w-6">
-                    <path fill="#EA4335" d="M12 2v10h10V2z" opacity="0.9" />
-                    <path fill="#4285F4" d="M2 12h10V2H2z" />
-                    <path fill="#FBBC05" d="M2 22h10V12H2z" />
-                    <path fill="#34A853" d="M12 22h10V12H12z" />
-                  </svg>
+                {/* EirumiView Themed Plus Icon */}
+                <div className="relative h-6 w-6 flex items-center justify-center rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-xs">
+                  <Plus className="h-4 w-4 stroke-[2.5]" />
                 </div>
                 <span className="text-[14px] font-semibold tracking-tight text-foreground">New</span>
               </button>
