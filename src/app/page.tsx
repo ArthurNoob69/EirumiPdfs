@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import {
-  Library,
   Search,
   Loader2,
   Plus,
@@ -14,12 +13,15 @@ import {
   FileText,
   Eye,
   HardDrive,
-  Sparkles,
   Folder as FolderIcon,
   FolderPlus,
   ChevronRight,
   Home as HomeIcon,
-  FolderTree,
+  SlidersHorizontal,
+  X,
+  Upload,
+  BookOpen,
+  TrendingUp,
 } from "lucide-react";
 import { PDFCard } from "@/components/pdf/PDFCard";
 import { PDFListView } from "@/components/pdf/PDFListView";
@@ -75,6 +77,7 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeFilter, setActiveFilter] = useState<FilterTab>("all");
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   // Active folder public ID for filtering (null = all documents / root)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
@@ -318,142 +321,210 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground bg-grid-pattern relative flex flex-col">
-      {/* Ambient Glows */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[130px] dark:bg-blue-600/10" />
-        <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] rounded-full bg-purple-500/10 blur-[130px] dark:bg-purple-600/10" />
+    <div className="min-h-screen bg-background text-foreground noise-overlay relative flex flex-col">
+      {/* Ambient Gradient Orbs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+        <div className="absolute -top-[30%] -left-[15%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-indigo-500/8 to-purple-500/5 blur-[120px]" />
+        <div className="absolute -bottom-[30%] -right-[15%] w-[60%] h-[60%] rounded-full bg-gradient-to-tl from-blue-500/8 to-cyan-500/5 blur-[120px]" />
+        <div className="absolute top-[40%] left-[50%] -translate-x-1/2 w-[40%] h-[30%] rounded-full bg-gradient-to-r from-violet-500/5 to-fuchsia-500/3 blur-[100px]" />
       </div>
 
-      {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur-xl shadow-xs">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setActiveFolderId(null); setActiveFilter("all"); }}>
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-900 to-black dark:from-white dark:to-neutral-300 shadow-md">
-              <Library className="h-5 w-5 text-white dark:text-black" />
+      {/* ═══════════════ HEADER ═══════════════ */}
+      <header className="sticky top-0 z-40 glass border-b border-border/60">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+          {/* Logo */}
+          <button
+            onClick={() => { setActiveFolderId(null); setActiveFilter("all"); }}
+            className="flex items-center gap-3 group"
+          >
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25 transition-transform group-hover:scale-105">
+              <BookOpen className="h-4.5 w-4.5 text-white" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <div className="hidden xs:block">
+              <h1 className="text-lg font-bold tracking-tight text-foreground leading-none">
                 EirumiPdfs
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  <Sparkles className="h-3 w-3" /> Cloud
-                </span>
               </h1>
+              <p className="text-[10px] font-medium text-muted-foreground -mt-0.5">Document Library</p>
             </div>
-          </div>
+          </button>
 
-          <div className="flex flex-1 items-center justify-end space-x-2 sm:space-x-3 ml-4">
-            {/* Search Input */}
-            <div className="relative w-full max-w-xs sm:w-64 group">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
+          {/* Desktop Search */}
+          <div className="hidden sm:flex relative flex-1 max-w-md mx-6">
+            <div className="relative w-full group">
+              <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
               <Input
                 placeholder="Search documents..."
-                className="pl-9 h-10 w-full rounded-full bg-background border-border text-foreground placeholder:text-muted-foreground transition-all"
+                className="pl-10 h-10 w-full rounded-xl bg-secondary/50 border-border/60 text-foreground placeholder:text-muted-foreground transition-all focus:bg-background focus:border-primary/40 focus:shadow-lg focus:shadow-primary/5"
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
               />
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
+          </div>
+
+          {/* Header Actions */}
+          <div className="flex items-center gap-2">
+            {/* Mobile search toggle */}
+            <button
+              onClick={() => setShowMobileSearch(!showMobileSearch)}
+              className="sm:hidden p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+            >
+              <Search className="h-5 w-5" />
+            </button>
 
             <ThemeToggle />
 
             <Button
               onClick={() => setIsUploadOpen(true)}
-              className="h-10 px-4 rounded-xl shadow-sm hidden sm:flex gap-2"
+              className="h-9 px-4 rounded-xl shadow-md shadow-primary/20 hidden sm:flex gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 border-0 text-white"
             >
-              <Plus className="h-4 w-4" /> Upload
+              <Upload className="h-4 w-4" /> Upload
             </Button>
             <Button
               onClick={() => setIsUploadOpen(true)}
               size="icon"
-              className="h-10 w-10 shrink-0 sm:hidden rounded-xl"
+              className="h-9 w-9 shrink-0 sm:hidden rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 border-0 text-white shadow-md shadow-primary/20"
             >
               <Plus className="h-5 w-5" />
             </Button>
           </div>
         </div>
+
+        {/* Mobile search bar */}
+        <AnimatePresence>
+          {showMobileSearch && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="sm:hidden overflow-hidden border-t border-border/40"
+            >
+              <div className="px-4 py-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search documents..."
+                    className="pl-9 h-10 w-full rounded-xl bg-secondary/50 border-border/60"
+                    value={search}
+                    autoFocus
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
-      {/* Main Content */}
-      <main className="relative z-10 mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 flex-1 w-full">
-        {/* Quick Stats Banner */}
+      {/* ═══════════════ MAIN CONTENT ═══════════════ */}
+      <main className="relative z-10 mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8 flex-1 w-full">
+
+        {/* ——— Stats Cards ——— */}
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="flex items-center space-x-3 rounded-2xl border border-border bg-card/80 backdrop-blur-md p-4 shadow-xs">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Total Documents</p>
-              <p className="text-lg font-bold text-foreground">{stats.totalDocs}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 rounded-2xl border border-border bg-card/80 backdrop-blur-md p-4 shadow-xs">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-              <Eye className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Total Views</p>
-              <p className="text-lg font-bold text-foreground">{stats.totalViews}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 rounded-2xl border border-border bg-card/80 backdrop-blur-md p-4 shadow-xs">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <HardDrive className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Library Size</p>
-              <p className="text-lg font-bold text-foreground">{formatBytes(stats.totalBytes)}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3 rounded-2xl border border-border bg-card/80 backdrop-blur-md p-4 shadow-xs">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
-              <Star className="h-5 w-5 fill-amber-400" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground">Starred</p>
-              <p className="text-lg font-bold text-foreground">{starredIds.length}</p>
-            </div>
-          </div>
+          {[
+            {
+              label: "Documents",
+              value: stats.totalDocs,
+              icon: FileText,
+              gradient: "from-blue-500 to-indigo-500",
+              bg: "bg-blue-500/8 dark:bg-blue-500/15",
+              text: "text-blue-600 dark:text-blue-400",
+            },
+            {
+              label: "Total Views",
+              value: stats.totalViews,
+              icon: TrendingUp,
+              gradient: "from-violet-500 to-purple-500",
+              bg: "bg-violet-500/8 dark:bg-violet-500/15",
+              text: "text-violet-600 dark:text-violet-400",
+            },
+            {
+              label: "Library Size",
+              value: formatBytes(stats.totalBytes),
+              icon: HardDrive,
+              gradient: "from-emerald-500 to-teal-500",
+              bg: "bg-emerald-500/8 dark:bg-emerald-500/15",
+              text: "text-emerald-600 dark:text-emerald-400",
+            },
+            {
+              label: "Starred",
+              value: starredIds.length,
+              icon: Star,
+              gradient: "from-amber-500 to-orange-500",
+              bg: "bg-amber-500/8 dark:bg-amber-500/15",
+              text: "text-amber-600 dark:text-amber-400",
+              iconFill: true,
+            },
+          ].map((stat) => (
+            <motion.div
+              key={stat.label}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative overflow-hidden rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm p-4 group hover:border-border transition-all"
+            >
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{stat.label}</p>
+                  <p className="text-xl font-bold text-foreground tracking-tight">{stat.value}</p>
+                </div>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${stat.bg} ${stat.text} transition-transform group-hover:scale-110`}>
+                  <stat.icon className={`h-5 w-5 ${stat.iconFill ? "fill-current" : ""}`} />
+                </div>
+              </div>
+              {/* Decorative gradient line at bottom */}
+              <div className={`absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r ${stat.gradient} opacity-0 group-hover:opacity-100 transition-opacity`} />
+            </motion.div>
+          ))}
         </div>
 
-        {/* Folders Section */}
+        {/* ——— Folders Section ——— */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <FolderTree className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground">Folders</h3>
-              <span className="text-xs text-muted-foreground font-semibold">({folders.length})</span>
+            <div className="flex items-center gap-2">
+              <FolderIcon className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">Folders</h2>
+              <span className="text-xs text-muted-foreground font-medium bg-secondary px-1.5 py-0.5 rounded-md">{folders.length}</span>
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => setIsCreateFolderOpen(true)}
-              className="h-8 gap-1.5 text-xs rounded-xl"
+              className="h-8 gap-1.5 text-xs rounded-xl border-border/60 hover:border-primary/40 hover:text-primary"
             >
               <FolderPlus className="h-3.5 w-3.5" />
-              <span>New Folder</span>
+              <span className="hidden xs:inline">New Folder</span>
             </Button>
           </div>
 
           {folders.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border bg-card/50 p-6 text-center">
-              <FolderIcon className="mx-auto h-8 w-8 text-muted-foreground/60 mb-2" />
-              <p className="text-xs font-semibold text-foreground">No folders yet</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Create folders to categorize contracts, invoices, notes, and study material.
+            <div className="rounded-2xl border border-dashed border-border/60 bg-card/40 p-8 text-center">
+              <div className="mx-auto h-12 w-12 rounded-2xl bg-secondary/80 flex items-center justify-center mb-3">
+                <FolderIcon className="h-6 w-6 text-muted-foreground/60" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">No folders yet</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                Organize your PDFs into folders for easy access
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsCreateFolderOpen(true)}
-                className="mt-3 text-xs h-8 gap-1.5"
+                className="mt-4 text-xs h-8 gap-1.5 rounded-xl"
               >
-                <FolderPlus className="h-3.5 w-3.5" /> Create your first folder
+                <FolderPlus className="h-3.5 w-3.5" /> Create Folder
               </Button>
             </div>
           ) : (
@@ -478,156 +549,122 @@ export default function Home() {
           )}
         </div>
 
-        {/* Breadcrumb Navigation & Controls */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* ——— Filter Tabs & Controls ——— */}
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {/* Breadcrumb or Filter Tabs */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center min-w-0">
             {activeFolder ? (
-              <div className="flex items-center space-x-2 bg-secondary/80 px-3.5 py-1.5 rounded-xl border border-border/60 text-xs font-medium">
+              <div className="flex items-center gap-1.5 bg-secondary/60 px-3 py-1.5 rounded-xl border border-border/50 text-xs font-medium">
                 <button
                   onClick={() => setActiveFolderId(null)}
                   className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <HomeIcon className="h-3.5 w-3.5" /> All Documents
+                  <HomeIcon className="h-3.5 w-3.5" /> Library
                 </button>
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-semibold text-primary flex items-center gap-1.5">
+                <ChevronRight className="h-3 w-3 text-muted-foreground/60" />
+                <span className="font-semibold text-primary flex items-center gap-1">
                   <FolderIcon className="h-3.5 w-3.5" /> {activeFolder.name}
                 </span>
                 <button
                   onClick={() => setActiveFolderId(null)}
-                  className="ml-2 text-xs text-muted-foreground hover:text-foreground underline"
+                  className="ml-1.5 p-0.5 rounded-md hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Clear
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-                <button
-                  onClick={() => {
-                    setActiveFilter("all");
-                    setPage(1);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                    activeFilter === "all"
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
-                  }`}
-                >
-                  All Documents
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveFilter("unorganized");
-                    setPage(1);
-                  }}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                    activeFilter === "unorganized"
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
-                  }`}
-                >
-                  Unorganized {folderData?.rootStats?.count !== undefined ? `(${folderData.rootStats.count})` : ""}
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveFilter("starred");
-                    setPage(1);
-                  }}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                    activeFilter === "starred"
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-accent"
-                  }`}
-                >
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
-                  Starred ({starredIds.length})
-                </button>
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none -mx-1 px-1">
+                {[
+                  { key: "all" as FilterTab, label: "All Documents", icon: null },
+                  { key: "unorganized" as FilterTab, label: `Unorganized${folderData?.rootStats?.count !== undefined ? ` (${folderData.rootStats.count})` : ""}`, icon: null },
+                  { key: "starred" as FilterTab, label: `Starred (${starredIds.length})`, icon: Star },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => { setActiveFilter(tab.key); setPage(1); }}
+                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                      activeFilter === tab.key
+                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                    }`}
+                  >
+                    {tab.icon && <tab.icon className={`h-3.5 w-3.5 ${activeFilter === tab.key ? "" : "fill-amber-400 text-amber-500"}`} />}
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Right: Sort & View Mode Switcher */}
-          <div className="flex items-center justify-between sm:justify-end space-x-2">
-            {/* Sort Selector */}
-            <select
-              className="h-9 rounded-xl border border-border bg-card px-3 py-1 text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-xs"
-              value={sort}
-              onChange={(e) => {
-                setSort(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="recent">Recently added</option>
-              <option value="name-asc">Name A-Z</option>
-              <option value="name-desc">Name Z-A</option>
-              <option value="views">Most viewed</option>
-              <option value="oldest">Oldest</option>
-            </select>
+          {/* Sort & View Mode */}
+          <div className="flex items-center justify-between sm:justify-end gap-2">
+            <div className="relative">
+              <SlidersHorizontal className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <select
+                className="h-9 rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm pl-8 pr-3 py-1 text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all cursor-pointer appearance-none"
+                value={sort}
+                onChange={(e) => { setSort(e.target.value); setPage(1); }}
+              >
+                <option value="recent">Recently added</option>
+                <option value="name-asc">Name A-Z</option>
+                <option value="name-desc">Name Z-A</option>
+                <option value="views">Most viewed</option>
+                <option value="oldest">Oldest</option>
+              </select>
+            </div>
 
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-secondary/80 p-1 rounded-xl border border-border/50">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === "grid"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                title="Grid View"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("compact")}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === "compact"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                title="Compact Grid"
-              >
-                <Grid3X3 className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  viewMode === "list"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                title="List View"
-              >
-                <List className="h-4 w-4" />
-              </button>
+            <div className="flex items-center bg-secondary/60 p-0.5 rounded-xl border border-border/50">
+              {[
+                { mode: "grid" as ViewMode, icon: LayoutGrid, label: "Grid" },
+                { mode: "compact" as ViewMode, icon: Grid3X3, label: "Compact" },
+                { mode: "list" as ViewMode, icon: List, label: "List" },
+              ].map(({ mode, icon: Icon, label }) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`p-2 rounded-[10px] transition-all ${
+                    viewMode === mode
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title={`${label} View`}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Gallery Content */}
+        {/* ——— Gallery Content ——— */}
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative">
+                <div className="h-12 w-12 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+              </div>
+              <p className="text-sm text-muted-foreground font-medium">Loading documents...</p>
+            </div>
           </div>
         ) : error || !data || data.error ? (
-          <div className="flex h-64 flex-col items-center justify-center text-red-500 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-2xl p-6">
+          <div className="flex h-64 flex-col items-center justify-center text-red-500 bg-red-500/5 border border-red-500/20 rounded-2xl p-6">
             <p className="font-semibold text-lg mb-2">Failed to load PDFs</p>
             <p className="text-sm opacity-80 mb-4">{error?.message || "Please check your database connection."}</p>
-            <Button variant="outline" onClick={() => mutate()}>Retry</Button>
+            <Button variant="outline" onClick={() => mutate()} className="rounded-xl">Retry</Button>
           </div>
         ) : displayedPdfs.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-6 shadow-xs text-center"
+            className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/40 p-6 text-center"
           >
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary mb-3 text-muted-foreground">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-secondary/80 mb-4">
               {activeFolder ? (
-                <FolderIcon className="h-7 w-7 text-primary" />
+                <FolderIcon className="h-8 w-8 text-primary" />
               ) : activeFilter === "starred" ? (
-                <Star className="h-7 w-7 text-amber-500" />
+                <Star className="h-8 w-8 text-amber-500" />
               ) : (
-                <Library className="h-7 w-7" />
+                <FileText className="h-8 w-8 text-muted-foreground" />
               )}
             </div>
             <p className="text-base font-semibold text-foreground">
@@ -636,32 +673,31 @@ export default function Home() {
                 : activeFilter === "starred"
                 ? "No starred documents yet"
                 : activeFilter === "unorganized"
-                ? "All documents are organized into folders!"
+                ? "All documents are organized!"
                 : search
                 ? "No documents match your search"
                 : "Your PDF library is empty"}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground max-w-sm">
+            <p className="mt-1.5 text-xs text-muted-foreground max-w-sm">
               {activeFolder
-                ? `Upload a PDF directly into "${activeFolder.name}" or move existing files into it.`
+                ? `Upload a PDF into "${activeFolder.name}" or move existing files.`
                 : activeFilter === "starred"
-                ? "Click the star icon on any document card to pin it here."
+                ? "Click the star icon on any document to pin it here."
                 : activeFilter === "unorganized"
-                ? "Files that have not been assigned to a folder appear here."
+                ? "Unassigned files appear here."
                 : search
                 ? "Try adjusting your search terms."
-                : "Upload documents to share them publicly and organize them into folders."}
+                : "Upload documents to share and organize them."}
             </p>
             <Button
-              className="mt-4 gap-2 rounded-xl"
+              className="mt-5 gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 border-0 text-white shadow-md shadow-primary/20"
               onClick={() => setIsUploadOpen(true)}
             >
-              <Plus className="h-4 w-4" />
+              <Upload className="h-4 w-4" />
               {activeFolder ? `Upload to ${activeFolder.name}` : "Upload Document"}
             </Button>
           </motion.div>
         ) : viewMode === "list" ? (
-          /* List View */
           <PDFListView
             pdfs={displayedPdfs}
             folders={folders}
@@ -669,24 +705,17 @@ export default function Home() {
             onToggleStar={toggleStar}
             onQuickPreview={(p) => setPreviewPdf(p)}
             onMoveToFolder={(p) => setPdfToMove(p)}
-            onFolderClick={(folderId) => {
-              setActiveFolderId(folderId);
-              setPage(1);
-            }}
-            onRename={(p) => {
-              setPdfToRename(p);
-              setNewTitle(p.title);
-            }}
+            onFolderClick={(folderId) => { setActiveFolderId(folderId); setPage(1); }}
+            onRename={(p) => { setPdfToRename(p); setNewTitle(p.title); }}
             onDelete={(p) => setPdfToDelete(p)}
             onCopyLink={handleCopyLink}
           />
         ) : (
-          /* Grid & Compact Grid Views */
           <motion.div
             className={`grid ${
               viewMode === "compact"
-                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4"
-                : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 sm:gap-6"
+                ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"
+                : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5"
             }`}
             initial="hidden"
             animate="show"
@@ -694,7 +723,7 @@ export default function Home() {
               hidden: { opacity: 0 },
               show: {
                 opacity: 1,
-                transition: { staggerChildren: 0.04 },
+                transition: { staggerChildren: 0.03 },
               },
             }}
           >
@@ -703,10 +732,10 @@ export default function Home() {
                 <motion.div
                   key={pdf.publicId}
                   layout
-                  initial={{ opacity: 0, y: 15 }}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.25 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <PDFCard
                     pdf={pdf}
@@ -716,14 +745,8 @@ export default function Home() {
                     onToggleStar={toggleStar}
                     onQuickPreview={(p) => setPreviewPdf(p)}
                     onMoveToFolder={(p) => setPdfToMove(p)}
-                    onFolderClick={(folderId) => {
-                      setActiveFolderId(folderId);
-                      setPage(1);
-                    }}
-                    onRename={(p) => {
-                      setPdfToRename(p);
-                      setNewTitle(p.title);
-                    }}
+                    onFolderClick={(folderId) => { setActiveFolderId(folderId); setPage(1); }}
+                    onRename={(p) => { setPdfToRename(p); setNewTitle(p.title); }}
                     onDelete={(p) => setPdfToDelete(p)}
                   />
                 </motion.div>
@@ -734,23 +757,41 @@ export default function Home() {
 
         {/* Pagination */}
         {data?.pagination?.totalPages > 1 && (
-          <div className="mt-10 flex items-center justify-center space-x-2">
+          <div className="mt-10 flex items-center justify-center gap-2">
             <Button
               variant="outline"
               disabled={page === 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded-xl text-xs h-8"
+              className="rounded-xl text-xs h-9 px-4 border-border/60"
             >
               Previous
             </Button>
-            <span className="text-xs text-muted-foreground px-3">
-              Page {page} of {data.pagination.totalPages}
-            </span>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(data.pagination.totalPages, 5) }, (_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    className={`h-9 w-9 rounded-xl text-xs font-semibold transition-all ${
+                      page === pageNum
+                        ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              {data.pagination.totalPages > 5 && (
+                <span className="text-xs text-muted-foreground px-1">...</span>
+              )}
+            </div>
             <Button
               variant="outline"
               disabled={page === data.pagination.totalPages}
               onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
-              className="rounded-xl text-xs h-8"
+              className="rounded-xl text-xs h-9 px-4 border-border/60"
             >
               Next
             </Button>
@@ -758,13 +799,13 @@ export default function Home() {
         )}
       </main>
 
+      {/* ═══════════════ MODALS ═══════════════ */}
+
       {/* Upload Modal */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
-        onSuccess={() => {
-          refreshAll();
-        }}
+        onSuccess={() => { refreshAll(); }}
         folders={folders}
         defaultFolderId={activeFolderId}
       />
@@ -795,34 +836,37 @@ export default function Home() {
 
       {/* Create Folder Dialog */}
       <Dialog open={isCreateFolderOpen} onOpenChange={(open) => !open && setIsCreateFolderOpen(false)}>
-        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
+        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border/60 shadow-2xl rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-foreground">Create New Folder</DialogTitle>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <FolderPlus className="h-5 w-5 text-primary" />
+              Create New Folder
+            </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Folder Name</label>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Folder Name</label>
               <Input
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="E.g. Invoices, Research, Contracts"
                 autoFocus
-                className="h-10 rounded-xl"
+                className="h-11 rounded-xl bg-secondary/30 border-border/60 focus:border-primary/40"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Color Theme</label>
-              <div className="flex items-center space-x-2 pt-1">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Color</label>
+              <div className="flex items-center gap-2.5 pt-1">
                 {FOLDER_COLORS.map((c) => (
                   <button
                     key={c.name}
                     type="button"
                     onClick={() => setNewFolderColor(c.name)}
-                    className={`h-7 w-7 rounded-full ${c.bg} transition-transform ${
+                    className={`h-8 w-8 rounded-full ${c.bg} transition-all ${
                       newFolderColor === c.name
-                        ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110"
-                        : "opacity-70 hover:opacity-100"
+                        ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-lg"
+                        : "opacity-60 hover:opacity-100 hover:scale-105"
                     }`}
                     title={c.label}
                   />
@@ -831,10 +875,10 @@ export default function Home() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateFolderOpen(false)} disabled={isCreatingFolder}>
+            <Button variant="outline" onClick={() => setIsCreateFolderOpen(false)} disabled={isCreatingFolder} className="rounded-xl">
               Cancel
             </Button>
-            <Button onClick={handleCreateFolder} disabled={isCreatingFolder || !newFolderName.trim()}>
+            <Button onClick={handleCreateFolder} disabled={isCreatingFolder || !newFolderName.trim()} className="rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 border-0 text-white">
               {isCreatingFolder && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Folder
             </Button>
@@ -844,25 +888,25 @@ export default function Home() {
 
       {/* Rename Folder Dialog */}
       <Dialog open={!!folderToRename} onOpenChange={(open) => !open && setFolderToRename(null)}>
-        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
+        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border/60 shadow-2xl rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-foreground">Rename Folder</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground">Folder Name</label>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Folder Name</label>
             <Input
               value={renameFolderName}
               onChange={(e) => setRenameFolderName(e.target.value)}
               placeholder="Enter folder name"
               autoFocus
-              className="h-10 rounded-xl"
+              className="h-11 rounded-xl bg-secondary/30 border-border/60"
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFolderToRename(null)} disabled={isRenamingFolder}>
+            <Button variant="outline" onClick={() => setFolderToRename(null)} disabled={isRenamingFolder} className="rounded-xl">
               Cancel
             </Button>
-            <Button onClick={handleRenameFolder} disabled={isRenamingFolder || !renameFolderName.trim()}>
+            <Button onClick={handleRenameFolder} disabled={isRenamingFolder || !renameFolderName.trim()} className="rounded-xl">
               {isRenamingFolder && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Changes
             </Button>
@@ -872,7 +916,7 @@ export default function Home() {
 
       {/* Delete Folder Dialog */}
       <Dialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
-        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
+        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border/60 shadow-2xl rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-red-600 dark:text-red-400">Delete Folder?</DialogTitle>
           </DialogHeader>
@@ -880,15 +924,15 @@ export default function Home() {
             <p className="text-sm text-muted-foreground">
               Are you sure you want to delete <strong className="text-foreground font-semibold">{folderToDelete?.name}</strong>?
             </p>
-            <p className="text-xs text-muted-foreground mt-2 bg-secondary/80 p-2.5 rounded-xl border border-border/50">
-              💡 <strong>Don&apos;t worry:</strong> Documents inside this folder will NOT be deleted. They will remain safely in your library at root.
+            <p className="text-xs text-muted-foreground mt-3 bg-secondary/60 p-3 rounded-xl border border-border/50">
+              💡 <strong>Don&apos;t worry:</strong> Documents inside this folder will NOT be deleted. They will remain safely in your library.
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFolderToDelete(null)} disabled={isDeletingFolder}>
+            <Button variant="outline" onClick={() => setFolderToDelete(null)} disabled={isDeletingFolder} className="rounded-xl">
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteFolder} disabled={isDeletingFolder}>
+            <Button variant="destructive" onClick={handleDeleteFolder} disabled={isDeletingFolder} className="rounded-xl">
               {isDeletingFolder && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Delete Folder
             </Button>
@@ -898,25 +942,25 @@ export default function Home() {
 
       {/* Rename Document Dialog */}
       <Dialog open={!!pdfToRename} onOpenChange={(open) => !open && setPdfToRename(null)}>
-        <DialogContent className="bg-card text-card-foreground border-border shadow-2xl">
+        <DialogContent className="bg-card text-card-foreground border-border/60 shadow-2xl rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-foreground">Rename Document</DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground">Document Title</label>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Document Title</label>
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               placeholder="Enter new title"
               autoFocus
-              className="h-10 rounded-xl"
+              className="h-11 rounded-xl bg-secondary/30 border-border/60"
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPdfToRename(null)} disabled={isRenaming}>
+            <Button variant="outline" onClick={() => setPdfToRename(null)} disabled={isRenaming} className="rounded-xl">
               Cancel
             </Button>
-            <Button onClick={handleRenameSubmit} disabled={isRenaming || !newTitle.trim()}>
+            <Button onClick={handleRenameSubmit} disabled={isRenaming || !newTitle.trim()} className="rounded-xl">
               {isRenaming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save Changes
             </Button>
@@ -926,21 +970,21 @@ export default function Home() {
 
       {/* Delete Document Dialog */}
       <Dialog open={!!pdfToDelete} onOpenChange={(open) => !open && setPdfToDelete(null)}>
-        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl">
+        <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border/60 shadow-2xl rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-red-600 dark:text-red-400">Delete Document?</DialogTitle>
           </DialogHeader>
           <div className="py-3">
             <p className="text-sm text-muted-foreground">
               Are you sure you want to permanently delete{" "}
-              <strong className="text-foreground font-semibold">{pdfToDelete?.title}</strong>? This action cannot be undone and the public URL will immediately cease functioning.
+              <strong className="text-foreground font-semibold">{pdfToDelete?.title}</strong>? This action cannot be undone.
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPdfToDelete(null)} disabled={isDeleting}>
+            <Button variant="outline" onClick={() => setPdfToDelete(null)} disabled={isDeleting} className="rounded-xl">
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteSubmit} disabled={isDeleting}>
+            <Button variant="destructive" onClick={handleDeleteSubmit} disabled={isDeleting} className="rounded-xl">
               {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Yes, Delete PDF
             </Button>
