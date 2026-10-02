@@ -158,9 +158,16 @@ function LazyThumbnailItem({
           <Page
             pageNumber={pNum}
             width={224}
+            suspense={false}
             renderTextLayer={false}
             renderAnnotationLayer={false}
             className="pointer-events-none"
+            loading={
+              <div className="flex flex-col items-center justify-center p-3 text-muted-foreground/30 gap-2 animate-pulse">
+                <FileText className="h-8 w-8 opacity-25" />
+                <span className="text-[11px] font-medium">Page {pNum}</span>
+              </div>
+            }
           />
         ) : (
           <div className="flex flex-col items-center justify-center p-3 text-muted-foreground/30 gap-2 animate-pulse">
@@ -233,6 +240,7 @@ function LazyScrollPageItem({
             pageNumber={pNum}
             width={pageWidth}
             rotate={rotation}
+            suspense={false}
             customTextRenderer={searchText.trim() ? textRenderer : undefined}
             loading={
               <div
@@ -241,6 +249,14 @@ function LazyScrollPageItem({
               >
                 <div className="h-8 w-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
                 <span className="text-xs">Loading page {pNum}...</span>
+              </div>
+            }
+            error={
+              <div
+                style={{ width: `${pageWidth}px`, height: `${estimatedHeight}px` }}
+                className="flex flex-col items-center justify-center bg-white text-muted-foreground/40 gap-2"
+              >
+                <span className="text-xs">Failed to load page {pNum}</span>
               </div>
             }
           />
@@ -415,9 +431,11 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [numPages, pageNumber, viewMode]);
 
+  const fileSource = useMemo(() => pdf.storageUrl, [pdf.storageUrl]);
+
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
-    setPageNumber(1);
+    setPageNumber((prev) => (prev > 0 ? prev : 1));
   };
 
   // Jump to specific page and scroll to it if in scroll mode
@@ -929,10 +947,12 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
 
       {/* ═══════════════ MAIN VIEWPORT (Document Context wraps Thumbnails & Canvas) ═══════════════ */}
       <div className="flex flex-1 min-h-0 relative overflow-hidden">
-        <Document
-          file={pdf.storageUrl}
-          onLoadSuccess={onDocumentLoadSuccess}
-          className="flex flex-1 min-h-0 w-full h-full relative overflow-hidden"
+        <React.Suspense fallback={null}>
+          <Document
+            file={fileSource}
+            onLoadSuccess={onDocumentLoadSuccess}
+            suspense={false}
+            className="flex flex-1 min-h-0 w-full h-full relative overflow-hidden"
           loading={
             <div className="flex flex-1 min-h-0 w-full flex-col items-center justify-center min-h-[50vh] text-muted-foreground gap-3">
               <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
@@ -1094,8 +1114,18 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                             pageNumber={leftBookPage}
                             width={bookSinglePageWidth}
                             rotate={rotation}
+                            suspense={false}
                             customTextRenderer={searchText.trim() ? textRenderer : undefined}
                             className="overflow-hidden"
+                            loading={
+                              <div
+                                style={{ width: `${bookSinglePageWidth}px`, height: `${bookSinglePageWidth * 1.414}px` }}
+                                className="flex flex-col items-center justify-center bg-white text-muted-foreground/30 gap-2"
+                              >
+                                <div className="h-8 w-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+                                <span className="text-xs">Loading page {leftBookPage}...</span>
+                              </div>
+                            }
                           />
                           <div className="absolute bottom-2 left-4 text-[11px] font-serif text-black/50 select-none bg-white/70 px-1 rounded">
                             — {leftBookPage} —
@@ -1131,8 +1161,18 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                             pageNumber={rightBookPage}
                             width={bookSinglePageWidth}
                             rotate={rotation}
+                            suspense={false}
                             customTextRenderer={searchText.trim() ? textRenderer : undefined}
                             className="overflow-hidden"
+                            loading={
+                              <div
+                                style={{ width: `${bookSinglePageWidth}px`, height: `${bookSinglePageWidth * 1.414}px` }}
+                                className="flex flex-col items-center justify-center bg-white text-muted-foreground/30 gap-2"
+                              >
+                                <div className="h-8 w-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+                                <span className="text-xs">Loading page {rightBookPage}...</span>
+                              </div>
+                            }
                           />
                           <div className="absolute bottom-2 right-4 text-[11px] font-serif text-black/50 select-none bg-white/70 px-1 rounded">
                             — {rightBookPage} —
@@ -1176,6 +1216,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                     pageNumber={pageNumber}
                     width={singlePageWidth}
                     rotate={rotation}
+                    suspense={false}
                     customTextRenderer={searchText.trim() ? textRenderer : undefined}
                     loading={
                       <div
@@ -1184,6 +1225,14 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                       >
                         <div className="h-8 w-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
                         <span className="text-xs">Loading page {pageNumber}...</span>
+                      </div>
+                    }
+                    error={
+                      <div
+                        style={{ width: `${singlePageWidth}px`, height: `${singlePageWidth * 1.38}px` }}
+                        className="flex flex-col items-center justify-center bg-white text-muted-foreground/40 gap-2"
+                      >
+                        <span className="text-xs">Failed to load page {pageNumber}</span>
                       </div>
                     }
                   />
@@ -1197,6 +1246,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
             )}
           </main>
         </Document>
+        </React.Suspense>
       </div>
 
       {/* ═══════════════ FLOATING BOTTOM TOOLBAR (Drive Signature) ═══════════════ */}
