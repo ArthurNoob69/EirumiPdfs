@@ -29,10 +29,9 @@ import {
   SlidersHorizontal,
   X,
   Copy,
-  Users,
-  Eye,
-  Calendar,
-  HardDrive,
+  BookOpen,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +65,8 @@ interface PDFViewerProps {
   pdf: IPDF;
 }
 
+type ViewerMode = "scroll" | "book" | "single";
+
 const ZOOM_PRESETS = [
   { label: "50%", value: 0.5 },
   { label: "75%", value: 0.75 },
@@ -74,6 +75,40 @@ const ZOOM_PRESETS = [
   { label: "150%", value: 1.5 },
   { label: "200%", value: 2.0 },
 ];
+
+// Synthesize a gentle paper turning rustle using Web Audio API
+function playPageTurnSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+    const duration = 0.12;
+    const bufferSize = Math.floor(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 1400;
+    filter.Q.value = 2.2;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.05, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start();
+  } catch (err) {
+    // Ignore audio autoplay restrictions
+  }
+}
 
 export function PDFViewer({ pdf }: PDFViewerProps) {
   const router = useRouter();
@@ -84,7 +119,12 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
   const [inputPage, setInputPage] = useState("1");
   const [scale, setScale] = useState(1.0);
   const [rotation, setRotation] = useState(0);
-  const [isContinuous, setIsContinuous] = useState(false);
+
+  // View Mode: Scroll-based (default), Book Mode (interactive 3D flip), or Single page
+  const [viewMode, setViewMode] = useState<ViewerMode>("scroll");
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [flipDirection, setFlipDirection] = useState<"next" | "prev">("next");
+
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
@@ -99,7 +139,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
   const [isStarred, setIsStarred] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Track view count
   useEffect(() => {
@@ -136,6 +176,42 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
     setInputPage(pageNumber.toString());
   }, [pageNumber]);
 
+  // Scroll Mode Intersection Observer: dynamically update pageNumber as user scrolls
+  useEffect(() => {
+    if (viewMode !== "scroll" || !numPages || !scrollContainerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let bestEntry: IntersectionObserverEntry | null = null;
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            if (!bestEntry || entry.intersectionRatio > bestEntry.intersectionRatio) {
+              bestEntry = entry;
+            }
+          }
+        }
+        if (bestEntry) {
+          const pageAttr = bestEntry.target.getAttribute("data-page-number");
+          if (pageAttr) {
+            const parsed = parseInt(pageAttr, 10);
+            if (!isNaN(parsed)) {
+              setPageNumber(parsed);
+            }
+          }
+        }
+      },
+      {
+        root: scrollContainerRef.current,
+        threshold: [0.1, 0.5, 0.9],
+      }
+    );
+
+    const pageElements = scrollContainerRef.current.querySelectorAll("[data-page-number]");
+    pageElements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [viewMode, numPages]);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -144,19 +220,21 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
       }
 
       if (e.key === "ArrowRight" || e.key === "PageDown") {
-        changePage(1);
+        turnPage("next");
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
-        changePage(-1);
+        turnPage("prev");
       } else if (e.key === "+" || e.key === "=") {
         changeZoom(0.15);
       } else if (e.key === "-") {
         changeZoom(-0.15);
       } else if (e.key === "Home") {
-        setPageNumber(1);
+        jumpToPage(1);
       } else if (e.key === "End") {
-        if (numPages) setPageNumber(numPages);
+        if (numPages) jumpToPage(numPages);
       } else if (e.key === "r" && !e.ctrlKey && !e.metaKey) {
         rotateClockwise();
+      } else if (e.key === "b" && !e.ctrlKey && !e.metaKey) {
+        setViewMode((m) => (m === "book" ? "scroll" : "book"));
       } else if (e.key === "f" && !e.ctrlKey && !e.metaKey) {
         toggleFullscreen();
       }
@@ -164,28 +242,60 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [numPages, pageNumber]);
+  }, [numPages, pageNumber, viewMode]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
     setPageNumber(1);
   };
 
-  const changePage = (offset: number) => {
-    setPageNumber((prev) => {
-      const next = prev + offset;
-      if (next >= 1 && numPages && next <= numPages) {
-        return next;
+  // Jump to specific page and scroll to it if in scroll mode
+  const jumpToPage = (target: number) => {
+    if (!numPages || target < 1 || target > numPages) return;
+    setPageNumber(target);
+
+    if (viewMode === "scroll") {
+      const el = document.getElementById(`pdf-page-${target}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-      return prev;
-    });
+    }
   };
 
-  const handlePageJump = (e: React.FormEvent) => {
+  // Page turning with book effect
+  const turnPage = (direction: "next" | "prev") => {
+    setFlipDirection(direction);
+
+    if (viewMode === "book") {
+      if (soundEnabled) playPageTurnSound();
+
+      if (direction === "next") {
+        if (pageNumber === 1) {
+          jumpToPage(Math.min(numPages || 1, 2));
+        } else {
+          jumpToPage(Math.min(numPages || 1, pageNumber + 2));
+        }
+      } else {
+        if (pageNumber <= 3) {
+          jumpToPage(1);
+        } else {
+          jumpToPage(Math.max(1, pageNumber - 2));
+        }
+      }
+    } else {
+      const offset = direction === "next" ? 1 : -1;
+      const target = pageNumber + offset;
+      if (target >= 1 && numPages && target <= numPages) {
+        jumpToPage(target);
+      }
+    }
+  };
+
+  const handlePageJumpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const p = parseInt(inputPage, 10);
     if (!isNaN(p) && p >= 1 && numPages && p <= numPages) {
-      setPageNumber(p);
+      jumpToPage(p);
     } else {
       setInputPage(pageNumber.toString());
     }
@@ -196,9 +306,9 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
   };
 
   const fitToWidth = () => {
-    if (canvasRef.current) {
-      const width = canvasRef.current.clientWidth - 64;
-      const targetScale = Math.min(1.8, Math.max(0.6, width / 700));
+    if (containerRef.current) {
+      const width = containerRef.current.clientWidth - 80;
+      const targetScale = Math.min(1.8, Math.max(0.6, width / (viewMode === "book" ? 1100 : 700)));
       setScale(Number(targetScale.toFixed(2)));
     }
   };
@@ -256,6 +366,19 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
     [searchText]
   );
 
+  // Book Spread Calculation
+  // Cover is Page 1 on the right.
+  // When pageNumber > 1: Left page is even, Right page is odd (or null if beyond numPages)
+  const leftBookPage = pageNumber === 1 ? null : pageNumber % 2 === 0 ? pageNumber : pageNumber - 1;
+  const rightBookPage =
+    pageNumber === 1
+      ? 1
+      : pageNumber % 2 === 0
+      ? pageNumber + 1 <= (numPages || 0)
+        ? pageNumber + 1
+        : null
+      : pageNumber;
+
   return (
     <div
       ref={containerRef}
@@ -265,8 +388,8 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
     >
       {/* ═══════════════ GOOGLE DRIVE STYLE TOP VIEWER BAR ═══════════════ */}
       <header className="h-14 px-3 sm:px-4 flex items-center justify-between border-b border-border/50 bg-background/95 backdrop-blur-xl z-30 shrink-0">
-        {/* Left: Back Arrow, PDF Badge, Title, Star, Folder */}
-        <div className="flex items-center gap-2.5 min-w-0 max-w-[45%]">
+        {/* Left: Back Arrow, PDF Badge, Title, Star */}
+        <div className="flex items-center gap-2.5 min-w-0 max-w-[35%]">
           <Button
             variant="ghost"
             size="icon"
@@ -277,12 +400,10 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
 
-          {/* PDF Red Badge */}
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/10 text-red-500 shrink-0">
             <FileText className="h-4 w-4" />
           </div>
 
-          {/* Title & Star */}
           <div className="flex items-center gap-2 min-w-0">
             <h1 className="truncate text-sm font-semibold text-foreground" title={pdf.title}>
               {pdf.title}
@@ -302,37 +423,86 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
           </div>
         </div>
 
-        {/* Center: Drive Page Nav & Zoom Controls */}
-        <div className="hidden md:flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full border border-border/50">
-          {/* Page Nav */}
+        {/* Center: Drive Nav + Mode Switcher (Scroll, Book View, Single Page) */}
+        <div className="hidden md:flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-full border border-border/50">
+          {/* Previous Page */}
           <button
-            onClick={() => changePage(-1)}
+            onClick={() => turnPage("prev")}
             disabled={pageNumber <= 1}
             className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-30 transition-colors"
-            title="Previous page"
+            title="Previous page (Left arrow)"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
 
-          <form onSubmit={handlePageJump} className="flex items-center text-xs font-semibold px-1">
+          {/* Jump Form */}
+          <form onSubmit={handlePageJumpSubmit} className="flex items-center text-xs font-semibold px-1">
             <input
               type="text"
               value={inputPage}
               onChange={(e) => setInputPage(e.target.value)}
               className="w-8 text-center bg-card text-foreground font-semibold rounded py-0.5 outline-none border border-border/60"
             />
-            <span className="mx-1.5 text-muted-foreground">/</span>
+            <span className="mx-1 text-muted-foreground">/</span>
             <span className="text-muted-foreground">{numPages || "--"}</span>
           </form>
 
+          {/* Next Page */}
           <button
-            onClick={() => changePage(1)}
-            disabled={numPages === null || pageNumber >= numPages}
+            onClick={() => turnPage("next")}
+            disabled={numPages === null || (viewMode === "book" ? rightBookPage === null || rightBookPage >= (numPages || 1) : pageNumber >= numPages)}
             className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-30 transition-colors"
-            title="Next page"
+            title="Next page (Right arrow)"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
+
+          <div className="h-3.5 w-px bg-border mx-1" />
+
+          {/* View Mode Buttons (Scroll vs Book vs Single) */}
+          <div className="flex items-center bg-card p-0.5 rounded-full border border-border/50">
+            {/* Scroll Mode */}
+            <button
+              onClick={() => setViewMode("scroll")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                viewMode === "scroll"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Continuous Scroll Mode"
+            >
+              <Scroll className="h-3.5 w-3.5" />
+              <span>Scroll</span>
+            </button>
+
+            {/* Book Mode */}
+            <button
+              onClick={() => setViewMode("book")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                viewMode === "book"
+                  ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Open Book View (Realistic 3D Page Turning)"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>Book View</span>
+            </button>
+
+            {/* Single Page */}
+            <button
+              onClick={() => setViewMode("single")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
+                viewMode === "single"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Single Page Mode"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Single</span>
+            </button>
+          </div>
 
           <div className="h-3.5 w-px bg-border mx-1" />
 
@@ -340,15 +510,14 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
           <button
             onClick={() => changeZoom(-0.15)}
             className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Zoom out"
+            title="Zoom out (-)"
           >
             <ZoomOut className="h-4 w-4" />
           </button>
 
-          {/* Zoom presets dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="px-2 py-0.5 text-xs font-medium text-foreground hover:bg-secondary rounded transition-colors">
+              <button className="px-1.5 py-0.5 text-xs font-medium text-foreground hover:bg-secondary rounded transition-colors">
                 {Math.round(scale * 100)}%
               </button>
             </DropdownMenuTrigger>
@@ -372,35 +541,26 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
           <button
             onClick={() => changeZoom(0.15)}
             className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Zoom in"
+            title="Zoom in (+)"
           >
             <ZoomIn className="h-4 w-4" />
           </button>
 
-          <div className="h-3.5 w-px bg-border mx-1" />
-
-          {/* Rotate */}
-          <button
-            onClick={rotateClockwise}
-            className="p-1 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Rotate clockwise (90°)"
-          >
-            <RotateCw className="h-4 w-4" />
-          </button>
-
-          {/* Continuous Scroll Toggle */}
-          <button
-            onClick={() => setIsContinuous(!isContinuous)}
-            className={`p-1 rounded-full transition-colors ${
-              isContinuous ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-            }`}
-            title={isContinuous ? "Continuous scroll" : "Page by page"}
-          >
-            {isContinuous ? <Scroll className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
-          </button>
+          {/* Book mode sound toggle */}
+          {viewMode === "book" && (
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`p-1 rounded-full transition-colors ${
+                soundEnabled ? "text-amber-500" : "text-muted-foreground hover:text-foreground"
+              }`}
+              title={soundEnabled ? "Mute page turn sound" : "Enable page turn sound"}
+            >
+              {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          )}
         </div>
 
-        {/* Right: Thumbnails toggle, Search, Print, Download, Google Drive Blue Share Button, 3-dots */}
+        {/* Right: Thumbnails, Search, Print, Download, Blue Share Button, 3-dots */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Toggle Thumbnails Sidebar */}
           <button
@@ -410,7 +570,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                 ? "bg-[#c2e7ff] text-[#001d35] dark:bg-[#004a77] dark:text-[#c2e7ff]"
                 : "text-muted-foreground hover:text-foreground hover:bg-secondary"
             }`}
-            title="Toggle thumbnail sidebar"
+            title="Toggle page thumbnails"
           >
             {showThumbnails ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
           </button>
@@ -455,7 +615,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
             <span className="hidden sm:inline">Share</span>
           </button>
 
-          {/* 3-dots More Menu */}
+          {/* 3-dots Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -470,10 +630,15 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                 <Info className="mr-2.5 h-4 w-4 text-muted-foreground" />
                 Document details
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={rotateClockwise} className="rounded-xl cursor-pointer text-xs">
+                <RotateCw className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                Rotate clockwise (90°)
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={rotateCounterClockwise} className="rounded-xl cursor-pointer text-xs">
                 <RotateCcw className="mr-2.5 h-4 w-4 text-muted-foreground" />
                 Rotate counter-clockwise
               </DropdownMenuItem>
+              <DropdownMenuSeparator className="my-1 bg-border/60" />
               <DropdownMenuItem onClick={toggleFullscreen} className="rounded-xl cursor-pointer text-xs">
                 {isFullscreen ? (
                   <Minimize className="mr-2.5 h-4 w-4 text-muted-foreground" />
@@ -489,7 +654,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
         </div>
       </header>
 
-      {/* Search Input Bar (Dropdown below header) */}
+      {/* Search Input Dropdown */}
       <AnimatePresence>
         {showSearchBar && (
           <motion.div
@@ -520,9 +685,9 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
         )}
       </AnimatePresence>
 
-      {/* ═══════════════ MAIN VIEWPORT (Thumbnails Sidebar + Canvas) ═══════════════ */}
+      {/* ═══════════════ MAIN VIEWPORT (Thumbnails Drawer + Reading Canvas) ═══════════════ */}
       <div className="flex flex-1 min-h-0 relative overflow-hidden">
-        {/* Left Page Thumbnails Drawer (Google Drive / Acrobat style) */}
+        {/* Left Thumbnails Drawer */}
         <AnimatePresence>
           {showThumbnails && (
             <motion.aside
@@ -545,11 +710,15 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {Array.from(new Array(numPages || 0), (_, index) => {
                   const pNum = index + 1;
-                  const isActive = pageNumber === pNum;
+                  const isActive =
+                    viewMode === "book"
+                      ? pNum === leftBookPage || pNum === rightBookPage
+                      : pageNumber === pNum;
+
                   return (
                     <div
                       key={`thumb_${pNum}`}
-                      onClick={() => setPageNumber(pNum)}
+                      onClick={() => jumpToPage(pNum)}
                       className={`flex flex-col items-center p-1.5 rounded-xl cursor-pointer transition-all ${
                         isActive
                           ? "bg-[#c2e7ff] text-[#001d35] ring-2 ring-primary dark:bg-[#004a77] dark:text-[#c2e7ff]"
@@ -573,15 +742,19 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
           )}
         </AnimatePresence>
 
-        {/* ═══════════════ PDF DOCUMENT CANVAS ═══════════════ */}
+        {/* ═══════════════ MAIN READING CANVAS ═══════════════ */}
         <main
-          ref={canvasRef}
-          className="flex-1 overflow-auto flex justify-center p-4 sm:p-8 relative bg-[#e9eef6]/60 dark:bg-[#0e0e0e]"
+          ref={scrollContainerRef}
+          className={`flex-1 overflow-auto flex justify-center p-4 sm:p-8 relative ${
+            viewMode === "book"
+              ? "bg-[#18181b] dark:bg-[#09090b] text-foreground"
+              : "bg-[#e9eef6]/60 dark:bg-[#0e0e0e]"
+          }`}
         >
           <Document
             file={pdf.storageUrl}
             onLoadSuccess={onDocumentLoadSuccess}
-            className="flex flex-col items-center"
+            className="flex flex-col items-center w-full"
             loading={
               <div className="flex flex-col items-center justify-center min-h-[50vh] text-muted-foreground gap-3">
                 <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
@@ -600,31 +773,183 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
               </div>
             }
           >
-            {isContinuous ? (
-              /* Continuous Multi-Page Scroll Mode (Google Drive default) */
-              <div className="flex flex-col items-center space-y-6 pb-24">
-                {Array.from(new Array(numPages || 0), (_, index) => (
-                  <div
-                    key={`page_${index + 1}`}
-                    className="shadow-xl rounded-sm overflow-hidden border border-black/10 bg-white"
-                  >
-                    <Page
-                      pageNumber={index + 1}
-                      scale={scale}
-                      rotate={rotation}
-                      customTextRenderer={searchText.trim() ? textRenderer : undefined}
-                      className="overflow-hidden"
-                    />
-                  </div>
-                ))}
+            {/* ═══════════════════════════════════════════════════════
+                1. CONTINUOUS SCROLL MODE (Default, Seamless Flow)
+                ═══════════════════════════════════════════════════════ */}
+            {viewMode === "scroll" && (
+              <div className="flex flex-col items-center space-y-6 pb-24 w-full max-w-4xl">
+                {Array.from(new Array(numPages || 0), (_, index) => {
+                  const pNum = index + 1;
+                  return (
+                    <div
+                      key={`page_${pNum}`}
+                      id={`pdf-page-${pNum}`}
+                      data-page-number={pNum}
+                      className="shadow-2xl rounded-sm overflow-hidden border border-black/10 bg-white transition-all relative group"
+                    >
+                      <Page
+                        pageNumber={pNum}
+                        scale={scale}
+                        rotate={rotation}
+                        customTextRenderer={searchText.trim() ? textRenderer : undefined}
+                        className="overflow-hidden"
+                      />
+                      {/* Subtle floating page indicator on page corner */}
+                      <div className="absolute bottom-2 right-3 text-[10px] font-medium text-black/40 pointer-events-none select-none">
+                        {pNum} / {numPages}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              /* Single Page Mode */
+            )}
+
+            {/* ═══════════════════════════════════════════════════════
+                2. REALISTIC OPEN BOOK VIEW (3D Page Turn Animation)
+                ═══════════════════════════════════════════════════════ */}
+            {viewMode === "book" && (
+              <div className="flex flex-col items-center justify-center min-h-full pb-20 w-full max-w-6xl">
+                {/* Book Desk Ambient Shadow & 3D Stage */}
+                <div
+                  className="relative flex items-center justify-center p-4 sm:p-8"
+                  style={{ perspective: "2500px" }}
+                >
+                  {/* Left / Right Interactive Turn Click Overlays */}
+                  <button
+                    onClick={() => turnPage("prev")}
+                    disabled={pageNumber <= 1}
+                    className="absolute left-0 top-0 bottom-0 w-12 sm:w-16 z-30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity disabled:pointer-events-none group"
+                    title="Turn to previous page"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-black/60 backdrop-blur-md text-white flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
+                      <ChevronLeft className="h-6 w-6" />
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => turnPage("next")}
+                    disabled={numPages === null || (rightBookPage === null || rightBookPage >= (numPages || 1))}
+                    className="absolute right-0 top-0 bottom-0 w-12 sm:w-16 z-30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity disabled:pointer-events-none group"
+                    title="Turn to next page"
+                  >
+                    <div className="h-12 w-12 rounded-full bg-black/60 backdrop-blur-md text-white flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
+                      <ChevronRight className="h-6 w-6" />
+                    </div>
+                  </button>
+
+                  {/* ─── REAL OPEN BOOK SPREAD ─── */}
+                  <motion.div
+                    key={`book_spread_${leftBookPage}_${rightBookPage}`}
+                    initial={{
+                      rotateY: flipDirection === "next" ? 3 : -3,
+                      opacity: 0.9,
+                    }}
+                    animate={{ rotateY: 0, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                    className="relative flex items-stretch shadow-2xl rounded-lg bg-[#27272a] p-1.5 sm:p-2.5 border border-zinc-700/60"
+                    style={{ transformStyle: "preserve-3d" }}
+                  >
+                    {/* Left Page (Even Page or Inside Front Cover) */}
+                    <div
+                      onClick={() => leftBookPage && turnPage("prev")}
+                      className={`relative min-w-[280px] sm:min-w-[380px] md:min-w-[440px] bg-white rounded-l-md overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-shadow ${
+                        leftBookPage
+                          ? "shadow-[inset_-18px_0_24px_-10px_rgba(0,0,0,0.35)]"
+                          : "bg-gradient-to-r from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-900 shadow-inner"
+                      }`}
+                      style={{
+                        transform: `scale(${scale})`,
+                        transformOrigin: "right center",
+                      }}
+                    >
+                      {leftBookPage ? (
+                        <div className="relative">
+                          <Page
+                            pageNumber={leftBookPage}
+                            scale={0.85 * scale}
+                            rotate={rotation}
+                            customTextRenderer={searchText.trim() ? textRenderer : undefined}
+                            className="overflow-hidden"
+                          />
+                          {/* Page Number Footer */}
+                          <div className="absolute bottom-2 left-4 text-[11px] font-serif text-black/50 select-none">
+                            — {leftBookPage} —
+                          </div>
+                        </div>
+                      ) : (
+                        /* Inside Cover Texture when on Page 1 */
+                        <div className="h-full w-full min-h-[480px] flex flex-col items-center justify-center p-6 text-center text-muted-foreground/60">
+                          <BookOpen className="h-10 w-10 mb-2 opacity-40" />
+                          <p className="text-xs font-serif italic">EirumiView Reader</p>
+                          <p className="text-[10px] mt-1 opacity-70">Inside Cover</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Central Book Spine Crease & Shadow Gutter */}
+                    <div className="relative w-3 sm:w-4 bg-gradient-to-r from-black/45 via-black/15 to-black/45 z-20 shrink-0 pointer-events-none shadow-sm">
+                      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[1px] bg-black/40" />
+                    </div>
+
+                    {/* Right Page (Odd Page or Page 1 Cover) */}
+                    <div
+                      onClick={() => rightBookPage && turnPage("next")}
+                      className={`relative min-w-[280px] sm:min-w-[380px] md:min-w-[440px] bg-white rounded-r-md overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-shadow ${
+                        rightBookPage
+                          ? "shadow-[inset_18px_0_24px_-10px_rgba(0,0,0,0.35)]"
+                          : "bg-gradient-to-r from-zinc-300 to-zinc-200 dark:from-zinc-900 dark:to-zinc-800 shadow-inner"
+                      }`}
+                      style={{
+                        transform: `scale(${scale})`,
+                        transformOrigin: "left center",
+                      }}
+                    >
+                      {rightBookPage ? (
+                        <div className="relative">
+                          <Page
+                            pageNumber={rightBookPage}
+                            scale={0.85 * scale}
+                            rotate={rotation}
+                            customTextRenderer={searchText.trim() ? textRenderer : undefined}
+                            className="overflow-hidden"
+                          />
+                          {/* Page Number Footer */}
+                          <div className="absolute bottom-2 right-4 text-[11px] font-serif text-black/50 select-none">
+                            — {rightBookPage} —
+                          </div>
+                        </div>
+                      ) : (
+                        /* End of book inside cover */
+                        <div className="h-full w-full min-h-[480px] flex flex-col items-center justify-center p-6 text-center text-muted-foreground/60">
+                          <p className="text-xs font-serif italic">End of Document</p>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                </div>
+
+                {/* Book Spread Navigation Banner */}
+                <div className="mt-4 flex items-center gap-3 text-xs text-zinc-400">
+                  <span className="font-serif">
+                    {pageNumber === 1
+                      ? "Cover • Page 1"
+                      : `Pages ${leftBookPage || ""} & ${rightBookPage || ""}`}
+                  </span>
+                  <span className="opacity-40">•</span>
+                  <span>Click left or right page to flip</span>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════════════════════════════════════
+                3. SINGLE PAGE PRESENTATION MODE
+                ═══════════════════════════════════════════════════════ */}
+            {viewMode === "single" && (
               <div className="relative flex flex-col items-center pb-24">
                 <motion.div
                   key={`${pageNumber}_${rotation}`}
-                  initial={{ opacity: 0.9 }}
-                  animate={{ opacity: 1 }}
+                  initial={{ opacity: 0.9, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.15 }}
                   className="shadow-2xl rounded-sm overflow-hidden border border-black/10 bg-white"
                 >
@@ -656,10 +981,10 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
 
       {/* ═══════════════ FLOATING BOTTOM TOOLBAR (Drive Signature) ═══════════════ */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center justify-center z-30 pointer-events-auto">
-        <div className="flex items-center gap-1 sm:gap-2 bg-card/90 text-foreground backdrop-blur-xl border border-border/70 px-3 py-1.5 rounded-full shadow-2xl">
+        <div className="flex items-center gap-1 sm:gap-2 bg-card/90 text-foreground backdrop-blur-xl border border-border/70 px-3.5 py-1.5 rounded-full shadow-2xl">
           {/* Previous Page */}
           <button
-            onClick={() => changePage(-1)}
+            onClick={() => turnPage("prev")}
             disabled={pageNumber <= 1}
             className="p-1.5 rounded-full hover:bg-secondary disabled:opacity-30 transition-colors"
             title="Previous page"
@@ -667,13 +992,13 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
             <ChevronLeft className="h-4 w-4" />
           </button>
 
-          {/* Jump form */}
-          <form onSubmit={handlePageJump} className="flex items-center text-xs font-semibold px-1">
+          {/* Jump Form */}
+          <form onSubmit={handlePageJumpSubmit} className="flex items-center text-xs font-semibold px-1">
             <input
               type="text"
               value={inputPage}
               onChange={(e) => setInputPage(e.target.value)}
-              className="w-7 text-center bg-secondary/80 text-foreground font-semibold rounded py-0.5 outline-none border border-transparent focus:border-border"
+              className="w-8 text-center bg-secondary/80 text-foreground font-semibold rounded py-0.5 outline-none border border-transparent focus:border-border"
             />
             <span className="mx-1 text-muted-foreground">/</span>
             <span className="text-muted-foreground">{numPages || "--"}</span>
@@ -681,12 +1006,28 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
 
           {/* Next Page */}
           <button
-            onClick={() => changePage(1)}
-            disabled={numPages === null || pageNumber >= numPages}
+            onClick={() => turnPage("next")}
+            disabled={numPages === null || (viewMode === "book" ? rightBookPage === null || rightBookPage >= (numPages || 1) : pageNumber >= numPages)}
             className="p-1.5 rounded-full hover:bg-secondary disabled:opacity-30 transition-colors"
             title="Next page"
           >
             <ChevronRight className="h-4 w-4" />
+          </button>
+
+          <div className="h-4 w-px bg-border mx-1" />
+
+          {/* Quick Mode Toggle on Floating Toolbar */}
+          <button
+            onClick={() => setViewMode(viewMode === "book" ? "scroll" : "book")}
+            className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              viewMode === "book"
+                ? "bg-amber-500 text-white"
+                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
+            title="Toggle Book View"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{viewMode === "book" ? "In Book" : "Book View"}</span>
           </button>
 
           <div className="h-4 w-px bg-border mx-1" />
@@ -721,7 +1062,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
         </div>
       </div>
 
-      {/* ═══════════════ GOOGLE DRIVE STYLE SHARE DIALOG ═══════════════ */}
+      {/* ═══════════════ SHARE DIALOG ═══════════════ */}
       <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
         <DialogContent className="sm:max-w-md bg-card text-card-foreground border-border shadow-2xl rounded-2xl">
           <DialogHeader>
@@ -732,7 +1073,6 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
           </DialogHeader>
 
           <div className="py-4 space-y-4">
-            {/* General Access Box (Google Drive style) */}
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">General access</p>
               <div className="flex items-start gap-3 p-3 rounded-2xl bg-secondary/40 border border-border/50">
@@ -746,7 +1086,6 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
               </div>
             </div>
 
-            {/* Public Link Box */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Document link</label>
               <div className="flex items-center gap-2">
