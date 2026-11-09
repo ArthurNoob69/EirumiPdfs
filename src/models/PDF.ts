@@ -8,6 +8,8 @@ export interface IPDF extends Document {
   storageUrl: string;
   fileSize: number;
   mimeType: string;
+  coverUrl?: string | null;
+  coverStorageKey?: string | null;
   pageCount?: number;
   views: number;
   folderId?: string | null;
@@ -49,6 +51,14 @@ const PDFSchema = new Schema<IPDF>(
       type: String,
       required: true,
       default: 'application/pdf',
+    },
+    coverUrl: {
+      type: String,
+      default: null,
+    },
+    coverStorageKey: {
+      type: String,
+      default: null,
     },
     pageCount: {
       type: Number,

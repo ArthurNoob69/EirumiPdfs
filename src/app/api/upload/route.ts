@@ -14,7 +14,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       ) => {
         // Authenticate the user here if needed
         return {
-          allowedContentTypes: ['application/pdf'],
+          allowedContentTypes: [
+            'application/pdf',
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'image/gif',
+          ],
           maximumSizeInBytes: 50 * 1024 * 1024,
           addRandomSuffix: true,
           tokenPayload: JSON.stringify({}),

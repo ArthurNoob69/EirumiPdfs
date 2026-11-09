@@ -14,6 +14,7 @@ import {
   Download,
   Folder as FolderIcon,
   Check,
+  Image as ImageIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -41,6 +42,7 @@ interface PDFListViewProps {
   onFolderClick?: (folderId: string) => void;
   onRename: (pdf: IPDF) => void;
   onDelete: (pdf: IPDF) => void;
+  onEditCover?: (pdf: IPDF) => void;
   onCopyLink: (pdf: IPDF, e: React.MouseEvent) => void;
 }
 
@@ -56,6 +58,7 @@ export function PDFListView({
   onFolderClick,
   onRename,
   onDelete,
+  onEditCover,
   onCopyLink,
 }: PDFListViewProps) {
   const router = useRouter();
@@ -119,9 +122,19 @@ export function PDFListView({
                   {/* Document Name */}
                   <td className="py-2.5 px-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-7 w-7 items-center justify-center rounded bg-red-500/10 text-red-500 shrink-0">
-                        <FileText className="h-4 w-4" />
-                      </div>
+                      {pdf.coverUrl ? (
+                        <div className="relative h-7 w-6 rounded overflow-hidden border border-border/60 shrink-0 bg-background shadow-xs">
+                          <img
+                            src={pdf.coverUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-7 w-7 items-center justify-center rounded bg-red-500/10 text-red-500 shrink-0">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                      )}
                       <span className="font-medium text-foreground truncate max-w-xs sm:max-w-md" title={pdf.title}>
                         {pdf.title}
                       </span>
@@ -233,6 +246,12 @@ export function PDFListView({
                             <Edit2 className="mr-2.5 h-4 w-4 text-muted-foreground" />
                             Rename
                           </DropdownMenuItem>
+                          {onEditCover && (
+                            <DropdownMenuItem onClick={() => onEditCover(pdf)} className="rounded-xl cursor-pointer">
+                              <ImageIcon className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                              Edit cover image
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuSeparator className="my-1 bg-border/60" />
                           <DropdownMenuItem
                             onClick={() => onDelete(pdf)}

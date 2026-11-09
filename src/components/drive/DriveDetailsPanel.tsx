@@ -17,6 +17,7 @@ import {
   HardDrive,
   Users,
   Clock,
+  Image as ImageIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { IPDF } from "@/models/PDF";
@@ -39,6 +40,7 @@ interface DriveDetailsPanelProps {
   onClose: () => void;
   onMovePdf?: (pdf: IPDF) => void;
   onDeletePdf?: (pdf: IPDF) => void;
+  onEditCover?: (pdf: IPDF) => void;
 }
 
 export function DriveDetailsPanel({
@@ -49,6 +51,7 @@ export function DriveDetailsPanel({
   onClose,
   onMovePdf,
   onDeletePdf,
+  onEditCover,
 }: DriveDetailsPanelProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"details" | "activity">("details");
@@ -125,10 +128,26 @@ export function DriveDetailsPanel({
           activeTab === "details" ? (
             <>
               {/* Document Preview Snapshot */}
-              <div className="rounded-xl border border-border/50 bg-secondary/30 p-2 flex items-center justify-center overflow-hidden">
+              <div className="rounded-xl border border-border/50 bg-secondary/30 p-3 flex flex-col items-center justify-center overflow-hidden gap-2">
                 <div className="relative aspect-[3/4] w-36 rounded shadow-sm overflow-hidden border border-border/40 bg-card">
-                  <PDFThumbnail url={selectedPdf.storageUrl} compact={false} />
+                  <PDFThumbnail url={selectedPdf.storageUrl} coverUrl={selectedPdf.coverUrl} compact={false} />
+                  {selectedPdf.coverUrl && (
+                    <span className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-xs text-[9px] font-semibold text-white tracking-wide flex items-center gap-1 shadow-xs pointer-events-none">
+                      <ImageIcon className="h-2.5 w-2.5" /> Cover
+                    </span>
+                  )}
                 </div>
+                {onEditCover && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEditCover(selectedPdf)}
+                    className="h-8 text-xs font-medium rounded-xl gap-1.5 border-border/60 hover:bg-secondary w-full max-w-[144px]"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                    {selectedPdf.coverUrl ? "Change Cover" : "Upload Cover"}
+                  </Button>
+                )}
               </div>
 
               {/* Action Buttons */}

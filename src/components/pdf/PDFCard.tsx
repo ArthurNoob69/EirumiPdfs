@@ -16,6 +16,7 @@ import {
   Check,
   Folder as FolderIcon,
   Info,
+  Image as ImageIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -49,6 +50,7 @@ interface PDFCardProps {
   onFolderClick?: (folderId: string) => void;
   onRename: (pdf: IPDF) => void;
   onDelete: (pdf: IPDF) => void;
+  onEditCover?: (pdf: IPDF) => void;
   compact?: boolean;
 }
 
@@ -64,6 +66,7 @@ export function PDFCard({
   onFolderClick,
   onRename,
   onDelete,
+  onEditCover,
   compact = false,
 }: PDFCardProps) {
   const router = useRouter();
@@ -115,6 +118,12 @@ export function PDFCard({
         <Edit2 className="mr-2.5 h-4 w-4 text-muted-foreground" />
         Rename
       </DropdownMenuItem>
+      {onEditCover && (
+        <DropdownMenuItem onClick={() => onEditCover(pdf)} className="rounded-xl cursor-pointer">
+          <ImageIcon className="mr-2.5 h-4 w-4 text-muted-foreground" />
+          Edit cover image
+        </DropdownMenuItem>
+      )}
       <DropdownMenuSeparator className="my-1 bg-border/60" />
       <DropdownMenuItem
         onClick={() => onDelete(pdf)}
@@ -172,8 +181,13 @@ export function PDFCard({
         {/* Thumbnail Preview Area */}
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-background/50 flex items-center justify-center p-2">
           <div className="h-full w-full max-w-[85%] rounded shadow-sm overflow-hidden border border-border/40 bg-card">
-            <PDFThumbnail url={pdf.storageUrl} compact={true} />
+            <PDFThumbnail url={pdf.storageUrl} coverUrl={pdf.coverUrl} compact={true} />
           </div>
+          {pdf.coverUrl && (
+            <span className="absolute bottom-2 left-2 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-semibold text-white tracking-wide flex items-center gap-1 shadow-xs pointer-events-none">
+              <ImageIcon className="h-2.5 w-2.5" /> Cover
+            </span>
+          )}
           {onToggleStar && (
             <button
               onClick={(e) => onToggleStar(pdf.publicId, e)}
@@ -251,8 +265,14 @@ export function PDFCard({
       {/* Thumbnail Window (Google Drive style doc preview) */}
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-background/70 flex items-center justify-center p-3">
         <div className="h-full w-full max-w-[90%] rounded-md shadow-sm overflow-hidden border border-border/40 bg-card transition-transform group-hover:scale-[1.02]">
-          <PDFThumbnail url={pdf.storageUrl} compact={false} />
+          <PDFThumbnail url={pdf.storageUrl} coverUrl={pdf.coverUrl} compact={false} />
         </div>
+
+        {pdf.coverUrl && (
+          <span className="absolute top-3 left-3 px-1.5 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-[9px] font-semibold text-white tracking-wide flex items-center gap-1 shadow-xs pointer-events-none">
+            <ImageIcon className="h-2.5 w-2.5" /> Cover
+          </span>
+        )}
 
         {/* Quick Preview Hover Pill */}
         {onQuickPreview && (

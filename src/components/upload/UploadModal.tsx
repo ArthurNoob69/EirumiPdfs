@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
-import { UploadCloud, FileText, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, Loader2, Image as ImageIcon, X, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,8 +36,12 @@ export function UploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(defaultFolderId);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   // Sync default folder when modal opens
   React.useEffect(() => {
@@ -45,6 +49,39 @@ export function UploadModal({
       setSelectedFolderId(defaultFolderId);
     }
   }, [isOpen, defaultFolderId]);
+
+  useEffect(() => {
+    return () => {
+      if (coverPreviewUrl && coverPreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(coverPreviewUrl);
+      }
+    };
+  }, [coverPreviewUrl]);
+
+  const handleCoverSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (selected) {
+      if (!selected.type.startsWith("image/")) {
+        setError("Cover must be an image file (JPG, PNG, WebP).");
+        return;
+      }
+      setCoverFile(selected);
+      const url = URL.createObjectURL(selected);
+      setCoverPreviewUrl(url);
+      setError(null);
+    }
+  };
+
+  const handleRemoveCover = () => {
+    if (coverPreviewUrl && coverPreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(coverPreviewUrl);
+    }
+    setCoverFile(null);
+    setCoverPreviewUrl(null);
+    if (coverInputRef.current) {
+      coverInputRef.current.value = "";
+    }
+  };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const selected = acceptedFiles[0];
@@ -75,13 +112,31 @@ export function UploadModal({
       setIsUploading(true);
       setError(null);
 
-      // 1. Upload directly via Vercel Blob
+      // 1. Upload PDF directly via Vercel Blob
       const blob = await upload(file.name, file, {
         access: 'public',
         handleUploadUrl: '/api/upload',
       });
 
-      // 2. Save metadata to DB
+      // 2. Upload cover image if provided
+      let coverBlobUrl: string | null = null;
+      if (coverFile) {
+        try {
+          const coverBlob = await upload(
+            `cover-${Date.now()}-${coverFile.name}`,
+            coverFile,
+            {
+              access: 'public',
+              handleUploadUrl: '/api/upload',
+            }
+          );
+          coverBlobUrl = coverBlob.url;
+        } catch (coverErr) {
+          console.error("Cover image upload failed, continuing without custom cover:", coverErr);
+        }
+      }
+
+      // 3. Save metadata to DB
       const dbRes = await fetch("/api/pdfs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,6 +148,8 @@ export function UploadModal({
           fileSize: file.size,
           mimeType: file.type,
           folderId: selectedFolderId || null,
+          coverUrl: coverBlobUrl,
+          coverStorageKey: coverBlobUrl,
         }),
       });
 
@@ -110,6 +167,7 @@ export function UploadModal({
   };
 
   const handleClose = () => {
+    handleRemoveCover();
     setFile(null);
     setTitle("");
     setError(null);
@@ -225,6 +283,74 @@ export function UploadModal({
                   </select>
                 </div>
               )}
+
+              {/* Cover Image Upload (Optional) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold tracking-tight text-foreground flex items-center gap-1.5">
+                    <ImageIcon className="h-4 w-4 text-primary" />
+                    Cover Image (Optional)
+                  </label>
+                  {coverFile && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveCover}
+                      disabled={isUploading}
+                      className="text-xs text-red-500 hover:text-red-600 font-medium"
+                    >
+                      Remove cover
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleCoverSelect}
+                  className="hidden"
+                />
+
+                {coverPreviewUrl ? (
+                  <div className="flex items-center gap-3 p-2.5 rounded-xl border border-border/60 bg-secondary/30">
+                    <div className="relative h-14 w-11 rounded-lg overflow-hidden border border-border/50 shrink-0 bg-background shadow-xs">
+                      <img
+                        src={coverPreviewUrl}
+                        alt="Cover preview"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-foreground truncate">
+                        {coverFile?.name}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {coverFile ? formatBytes(coverFile.size) : ""}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => coverInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="h-8 text-xs rounded-lg"
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-border/80 hover:border-primary/50 hover:bg-secondary/40 text-xs font-medium text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                  >
+                    <ImageIcon className="h-4 w-4 text-muted-foreground/60" />
+                    <span>Upload custom cover image (PNG, JPG, WebP)</span>
+                  </button>
+                )}
+              </div>
 
               {error && (
                 <motion.p 

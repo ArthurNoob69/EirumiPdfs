@@ -82,7 +82,18 @@ export async function POST(req: Request) {
     await connectToDatabase();
     
     const body = await req.json();
-    const { title, originalFileName, storageKey, storageUrl, fileSize, mimeType, pageCount, folderId } = body;
+    const {
+      title,
+      originalFileName,
+      storageKey,
+      storageUrl,
+      fileSize,
+      mimeType,
+      pageCount,
+      folderId,
+      coverUrl,
+      coverStorageKey,
+    } = body;
 
     if (!title || !originalFileName || !storageKey || !storageUrl || !fileSize) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -101,6 +112,8 @@ export async function POST(req: Request) {
       mimeType: mimeType || 'application/pdf',
       pageCount,
       folderId: folderId || null,
+      coverUrl: coverUrl || null,
+      coverStorageKey: coverStorageKey || null,
     });
 
     await pdf.save();

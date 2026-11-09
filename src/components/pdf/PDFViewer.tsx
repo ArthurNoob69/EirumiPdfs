@@ -32,7 +32,9 @@ import {
   VolumeX,
   Maximize2,
   FileSearch,
+  Image as ImageIcon,
 } from "lucide-react";
+import { EditCoverModal } from "@/components/pdf/EditCoverModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { IPDF } from "@/models/PDF";
@@ -283,6 +285,9 @@ function LazyScrollPageItem({
 export function PDFViewer({ pdf }: PDFViewerProps) {
   const router = useRouter();
   const { toast } = useToast();
+
+  const [currentPdf, setCurrentPdf] = useState<IPDF>(pdf);
+  const [showCoverModal, setShowCoverModal] = useState(false);
 
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -890,6 +895,10 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
                 <Info className="mr-2.5 h-4 w-4 text-muted-foreground" />
                 Document details
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowCoverModal(true)} className="rounded-xl cursor-pointer text-xs">
+                <ImageIcon className="mr-2.5 h-4 w-4 text-muted-foreground" />
+                Edit cover image
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={rotateClockwise} className="rounded-xl cursor-pointer text-xs">
                 <RotateCw className="mr-2.5 h-4 w-4 text-muted-foreground" />
                 Rotate clockwise (90°)
@@ -1440,13 +1449,49 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
           </DialogHeader>
 
           <div className="py-3 space-y-2 text-xs">
+            {/* Cover Image Preview in details */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-secondary/30 border border-border/40">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-16 rounded-md overflow-hidden bg-secondary/80 border border-border/50 shrink-0 flex items-center justify-center relative">
+                  {currentPdf.coverUrl ? (
+                    <img
+                      src={currentPdf.coverUrl}
+                      alt={currentPdf.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
+                  )}
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {currentPdf.coverUrl ? "Custom Cover Image" : "No Custom Cover"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {currentPdf.coverUrl ? "Custom cover set for this PDF" : "Default first page rendered"}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowDetailsDialog(false);
+                  setShowCoverModal(true);
+                }}
+                className="text-xs h-8 rounded-full border-border/70"
+              >
+                {currentPdf.coverUrl ? "Change" : "Upload"}
+              </Button>
+            </div>
+
             <div className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">Title</span>
-              <span className="font-semibold text-foreground truncate max-w-[200px]">{pdf.title}</span>
+              <span className="font-semibold text-foreground truncate max-w-[200px]">{currentPdf.title}</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">Original File</span>
-              <span className="font-medium text-foreground truncate max-w-[200px]">{pdf.originalFileName}</span>
+              <span className="font-medium text-foreground truncate max-w-[200px]">{currentPdf.originalFileName}</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">Type</span>
@@ -1454,7 +1499,7 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
             </div>
             <div className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">Size</span>
-              <span className="font-medium text-foreground">{formatBytes(pdf.fileSize)}</span>
+              <span className="font-medium text-foreground">{formatBytes(currentPdf.fileSize)}</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">Total Pages</span>
@@ -1462,11 +1507,11 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
             </div>
             <div className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">Total Views</span>
-              <span className="font-medium text-foreground">{pdf.views} times</span>
+              <span className="font-medium text-foreground">{currentPdf.views} times</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">Created</span>
-              <span className="font-medium text-foreground">{format(new Date(pdf.createdAt), "MMMM d, yyyy 'at' h:mm a")}</span>
+              <span className="font-medium text-foreground">{format(new Date(currentPdf.createdAt), "MMMM d, yyyy 'at' h:mm a")}</span>
             </div>
           </div>
 
@@ -1480,6 +1525,20 @@ export function PDFViewer({ pdf }: PDFViewerProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ═══════════════ EDIT COVER MODAL ═══════════════ */}
+      <EditCoverModal
+        pdf={currentPdf}
+        isOpen={showCoverModal}
+        onClose={() => setShowCoverModal(false)}
+        onSuccess={(updated) => {
+          if (updated) {
+            setCurrentPdf(updated);
+          }
+          setShowCoverModal(false);
+          toast("Cover image updated successfully!");
+        }}
+      />
     </div>
   );
 }

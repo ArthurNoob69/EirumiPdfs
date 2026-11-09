@@ -28,7 +28,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const { id } = await params;
     await connectToDatabase();
-    const { title, folderId } = await req.json();
+    const { title, folderId, coverUrl, coverStorageKey } = await req.json();
+
+    const existingPdf = await PDF.findOne({ publicId: id, status: 'active' });
+    if (!existingPdf) {
+      return NextResponse.json({ error: 'PDF not found' }, { status: 404 });
+    }
 
     const updateFields: any = {};
     if (title && typeof title === 'string' && title.trim()) {
@@ -36,6 +41,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (folderId !== undefined) {
       updateFields.folderId = folderId ? folderId : null;
+    }
+    if (coverUrl !== undefined) {
+      updateFields.coverUrl = coverUrl ? coverUrl : null;
+    }
+    if (coverStorageKey !== undefined) {
+      updateFields.coverStorageKey = coverStorageKey ? coverStorageKey : null;
+
+      // Clean up old cover from storage if replaced or removed
+      if (existingPdf.coverStorageKey && existingPdf.coverStorageKey !== coverStorageKey) {
+        try {
+          await deleteStorageObject(existingPdf.coverStorageKey);
+        } catch (e) {
+          console.error('Failed to delete old cover from storage:', e);
+        }
+      }
     }
 
     if (Object.keys(updateFields).length === 0) {
@@ -45,12 +65,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const pdf = await PDF.findOneAndUpdate(
       { publicId: id, status: 'active' },
       { $set: updateFields },
-      { new: true }
+      { returnDocument: 'after' }
     );
-
-    if (!pdf) {
-      return NextResponse.json({ error: 'PDF not found' }, { status: 404 });
-    }
 
     return NextResponse.json(pdf);
   } catch (error) {
@@ -70,17 +86,20 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: 'PDF not found' }, { status: 404 });
     }
 
-    // Mark as deleted in DB first (soft delete or hard delete? Request says: delete record and S3 object)
-    // We will hard delete it or mark status as deleted and then delete from S3.
-    // Let's hard delete to save space, but wait, it's safer to delete from S3 first, then DB, or vice versa.
-    // Let's delete from S3 first:
+    // Delete PDF file from storage
     try {
       await deleteStorageObject(pdf.storageKey);
     } catch (storageError) {
       console.error('Failed to delete object from storage:', storageError);
-      // We might still want to delete the DB record if the object doesn't exist, 
-      // but let's continue to delete from DB anyway to not leave orphaned DB records 
-      // if S3 delete fails due to 404.
+    }
+
+    // Delete custom cover if exists
+    if (pdf.coverStorageKey) {
+      try {
+        await deleteStorageObject(pdf.coverStorageKey);
+      } catch (coverErr) {
+        console.error('Failed to delete cover from storage:', coverErr);
+      }
     }
 
     await PDF.deleteOne({ _id: pdf._id });

@@ -30,6 +30,7 @@ import {
 import { PDFCard } from "@/components/pdf/PDFCard";
 import { PDFListView } from "@/components/pdf/PDFListView";
 import { PDFQuickPreviewModal } from "@/components/pdf/PDFQuickPreviewModal";
+import { EditCoverModal } from "@/components/pdf/EditCoverModal";
 import { FolderCard, IFolderWithStats } from "@/components/folder/FolderCard";
 import { MoveToFolderModal } from "@/components/folder/MoveToFolderModal";
 import { UploadModal } from "@/components/upload/UploadModal";
@@ -121,6 +122,8 @@ export default function Home() {
   const [pdfToRename, setPdfToRename] = useState<IPDF | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
+
+  const [pdfToEditCover, setPdfToEditCover] = useState<IPDF | null>(null);
 
   const [pdfToDelete, setPdfToDelete] = useState<IPDF | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -563,6 +566,7 @@ export default function Home() {
                             setPdfToRename(p);
                             setNewTitle(p.title);
                           }}
+                          onEditCover={(p) => setPdfToEditCover(p)}
                           onDelete={(p) => setPdfToDelete(p)}
                         />
                       </div>
@@ -714,6 +718,7 @@ export default function Home() {
                         setPdfToRename(p);
                         setNewTitle(p.title);
                       }}
+                      onEditCover={(p) => setPdfToEditCover(p)}
                       onDelete={(p) => setPdfToDelete(p)}
                       onCopyLink={handleCopyLink}
                     />
@@ -746,6 +751,7 @@ export default function Home() {
                             setPdfToRename(p);
                             setNewTitle(p.title);
                           }}
+                          onEditCover={(p) => setPdfToEditCover(p)}
                           onDelete={(p) => setPdfToDelete(p)}
                         />
                       </div>
@@ -806,6 +812,7 @@ export default function Home() {
               onClose={() => setIsDetailsPanelOpen(false)}
               onMovePdf={(p) => setPdfToMove(p)}
               onDeletePdf={(p) => setPdfToDelete(p)}
+              onEditCover={(p) => setPdfToEditCover(p)}
             />
           </div>
         </div>
@@ -1021,6 +1028,19 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit PDF Cover Modal */}
+      <EditCoverModal
+        isOpen={!!pdfToEditCover}
+        pdf={pdfToEditCover}
+        onClose={() => setPdfToEditCover(null)}
+        onSuccess={(updated) => {
+          globalMutate((key) => typeof key === "string" && key.startsWith("/api/pdfs"));
+          if (updated && selectedPdf?.publicId === updated.publicId) {
+            setSelectedPdf(updated);
+          }
+        }}
+      />
     </div>
   );
 }

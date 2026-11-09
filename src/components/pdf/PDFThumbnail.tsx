@@ -11,11 +11,28 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.vers
 
 interface PDFThumbnailProps {
   url: string;
+  coverUrl?: string | null;
   compact?: boolean;
 }
 
-export function PDFThumbnail({ url, compact = false }: PDFThumbnailProps) {
+export function PDFThumbnail({ url, coverUrl, compact = false }: PDFThumbnailProps) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [coverImageError, setCoverImageError] = useState(false);
+
+  // If a custom cover image is set and valid, display it directly
+  if (coverUrl && !coverImageError) {
+    return (
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-secondary/30">
+        <img
+          src={coverUrl}
+          alt="PDF Cover"
+          onError={() => setCoverImageError(true)}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          loading="lazy"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-secondary/30">
